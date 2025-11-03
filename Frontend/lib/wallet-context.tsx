@@ -1,21 +1,18 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { ethers, type Eip1193Provider } from 'ethers'
 
 // Proper TypeScript types for MetaMask/Ethereum provider
-interface EthereumProvider extends Eip1193Provider {
+interface EthereumProvider {
   request(args: { method: 'eth_requestAccounts' }): Promise<string[]>
   request(args: { method: 'eth_getBalance'; params: [string, string] }): Promise<string>
   request(args: { method: 'wallet_switchEthereumChain'; params: [{ chainId: string }] }): Promise<null>
   request(args: { method: 'wallet_addEthereumChain'; params: [AddEthereumChainParameter] }): Promise<null>
   request(args: { method: string; params?: unknown[] }): Promise<unknown>
-  on(event: 'accountsChanged', handler: (accounts: string[]) => void): void
-  on(event: 'chainChanged', handler: (chainId: string) => void): void
-  on(event: string, handler: (...args: any[]) => void): void
-  removeListener(event: 'accountsChanged', handler: (accounts: string[]) => void): void
-  removeListener(event: 'chainChanged', handler: (chainId: string) => void): void
-  removeListener(event: string, handler: (...args: any[]) => void): void
+  on?(event: string, handler: (...args: any[]) => void): void
+  removeListener?(event: string, handler: (...args: any[]) => void): void
+  isMetaMask?: boolean
+  providers?: EthereumProvider[]
 }
 
 interface AddEthereumChainParameter {
@@ -44,28 +41,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<string | null>(null)
   const [balance, setBalance] = useState<string | null>(null)
 
-  // Check if we're in development and add a mock ethereum provider
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !window.ethereum && process.env.NODE_ENV === 'development') {
-      console.warn('No Ethereum provider found. Install MetaMask or another Web3 wallet.')
-    }
-  }, [])
-
   const connect = async () => {
-    const ethereum = window.ethereum as EthereumProvider | undefined
-    
-    if (!ethereum) {
-      alert("Please install MetaMask or another Web3 wallet")
-      return
-    }
-
-    if (typeof ethereum.request !== 'function') {
-      alert("Ethereum provider is not properly initialized")
-      return
-    }
-
     try {
-      const accounts = await ethereum.request({ method: "eth_requestAccounts" })
+      // Check if MetaMask is installed
+      if (typeof window === 'undefined' || !window.ethereum) {
+        alert("Please install MetaMask or another Web3 wallet")
+        return
+      }
+
+      let provider = window.ethereum as EthereumProvider
+
+      // Handle multiple wallet providers (e.g., MetaMask + Coinbase)
+      if (provider.providers && Array.isArray(provider.providers)) {
+        // Prefer MetaMask if available
+        const metamaskProvider = provider.providers.find(p => p.isMetaMask)
+        provider = metamaskProvider || provider.providers[0]
+      }
+
+      // Request account access
+      const accounts = await provider.request({ 
+        method: "eth_requestAccounts" 
+      }) as string[]
       
       if (!accounts || accounts.length === 0) {
         alert("No accounts found. Please check your wallet.")
@@ -75,38 +71,50 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAccount(accounts[0])
 
       // Get balance
-      const balanceWei = await ethereum.request({
-        method: "eth_getBalance",
-        params: [accounts[0], "latest"],
-      })
-      const balanceNum = Number.parseInt(balanceWei, 16) / 1e18
-      setBalance(balanceNum.toFixed(4))
+      try {
+        const balanceWei = await provider.request({
+          method: "eth_getBalance",
+          params: [accounts[0], "latest"],
+        }) as string
+        
+        const balanceNum = Number.parseInt(balanceWei, 16) / 1e18
+        setBalance(balanceNum.toFixed(4))
+      } catch (balanceError) {
+        console.warn("Could not fetch balance:", balanceError)
+        setBalance("0.0000")
+      }
 
       // Switch to BNB Smart Chain (chainId 56)
       try {
-        await ethereum.request({
+        await provider.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: "0x38" }],
         })
-      } catch (switchError: unknown) {
-        if ((switchError as any).code === 4902) {
-          // Chain not added, add it
-          await ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [
-              {
-                chainId: "0x38",
-                chainName: "BNB Smart Chain",
-                nativeCurrency: {
-                  name: "BNB",
-                  symbol: "BNB",
-                  decimals: 18,
+      } catch (switchError: any) {
+        // Chain not added yet, try to add it
+        if (switchError.code === 4902) {
+          try {
+            await provider.request({
+              method: "wallet_addEthereumChain",
+              params: [
+                {
+                  chainId: "0x38",
+                  chainName: "BNB Smart Chain",
+                  nativeCurrency: {
+                    name: "BNB",
+                    symbol: "BNB",
+                    decimals: 18,
+                  },
+                  rpcUrls: ["https://bsc-dataseed1.binance.org"],
+                  blockExplorerUrls: ["https://bscscan.com"],
                 },
-                rpcUrls: ["https://bsc-dataseed1.binance.org:443"],
-                blockExplorerUrls: ["https://bscscan.com"],
-              },
-            ],
-          })
+              ],
+            })
+          } catch (addError) {
+            console.error("Failed to add BNB Smart Chain:", addError)
+          }
+        } else {
+          console.warn("Failed to switch to BNB Smart Chain:", switchError)
         }
       }
     } catch (error) {
@@ -121,32 +129,41 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    const ethereum = window.ethereum as EthereumProvider | undefined
-    
-    if (ethereum) {
-      const handleAccountsChanged = (...args: any[]) => {
-        const accounts = args[0] as string[]
-        if (accounts.length === 0) {
-          disconnect()
-        } else {
-          setAccount(accounts[0])
-        }
+    if (typeof window === 'undefined' || !window.ethereum) {
+      return
+    }
+
+    let provider = window.ethereum as EthereumProvider
+
+    // Handle multiple wallet providers
+    if (provider.providers && Array.isArray(provider.providers)) {
+      const metamaskProvider = provider.providers.find(p => p.isMetaMask)
+      provider = metamaskProvider || provider.providers[0]
+    }
+
+    const handleAccountsChanged = (accounts: string[]) => {
+      if (accounts.length === 0) {
+        disconnect()
+      } else {
+        setAccount(accounts[0])
       }
+    }
 
-      const handleChainChanged = (...args: any[]) => {
-        window.location.reload()
-      }
+    const handleChainChanged = () => {
+      window.location.reload()
+    }
 
-      // Listen for account changes
-      ethereum.on("accountsChanged", handleAccountsChanged)
+    // Setup event listeners
+    if (provider.on) {
+      provider.on("accountsChanged", handleAccountsChanged)
+      provider.on("chainChanged", handleChainChanged)
+    }
 
-      // Listen for chain changes
-      ethereum.on("chainChanged", handleChainChanged)
-
-      // Cleanup
-      return () => {
-        ethereum.removeListener("accountsChanged", handleAccountsChanged)
-        ethereum.removeListener("chainChanged", handleChainChanged)
+    // Cleanup
+    return () => {
+      if (provider.removeListener) {
+        provider.removeListener("accountsChanged", handleAccountsChanged)
+        provider.removeListener("chainChanged", handleChainChanged)
       }
     }
   }, [])
@@ -176,10 +193,17 @@ export function useWallet() {
 
 // Helper function for getting accounts
 export const getAccounts = async (): Promise<string[]> => {
-  if (!window.ethereum) return []
+  if (typeof window === 'undefined' || !window.ethereum) return []
   
   try {
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" })
+    let provider = window.ethereum as EthereumProvider
+    
+    if (provider.providers && Array.isArray(provider.providers)) {
+      const metamaskProvider = provider.providers.find(p => p.isMetaMask)
+      provider = metamaskProvider || provider.providers[0]
+    }
+    
+    const accounts = await provider.request({ method: "eth_requestAccounts" }) as string[]
     return accounts
   } catch (error) {
     console.error("Error getting accounts:", error)
@@ -187,12 +211,18 @@ export const getAccounts = async (): Promise<string[]> => {
   }
 }
 
-// Helper for creating ethers provider
-export const getEthersProvider = () => {
-  const ethereum = window.ethereum as EthereumProvider | undefined
-  
-  if (!ethereum) {
+// Helper for creating a simple provider wrapper (without ethers.js dependency)
+export const getProvider = () => {
+  if (typeof window === 'undefined' || !window.ethereum) {
     throw new Error("Ethereum provider not found")
   }
-  return new ethers.BrowserProvider(ethereum)
+  
+  let provider = window.ethereum as EthereumProvider
+  
+  if (provider.providers && Array.isArray(provider.providers)) {
+    const metamaskProvider = provider.providers.find(p => p.isMetaMask)
+    provider = metamaskProvider || provider.providers[0]
+  }
+  
+  return provider
 }

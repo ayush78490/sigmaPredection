@@ -1,8 +1,17 @@
 "use client"
 
+import { ThemeProvider } from "next-themes"
 import { WalletProvider } from "@/lib/wallet-context"
-import type { ReactNode } from "react"
 
-export function Providers({ children }: { children: ReactNode }) {
-  return <WalletProvider>{children}</WalletProvider>
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem={false}
+      disableTransitionOnChange
+    >
+      <WalletProvider>{children}</WalletProvider>
+    </ThemeProvider>
+  )
 }

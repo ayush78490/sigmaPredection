@@ -1,5 +1,5 @@
 export interface Market {
-  id: string
+  id?: number
   slug: string
   title: string
   description: string
@@ -12,7 +12,7 @@ export interface Market {
 
 export const MARKETS: Market[] = [
   {
-    id: "1",
+    id: 1,
     slug: "trump-xi-meeting",
     title: "Will Trump meet with Xi Jinping by October?",
     description: "Will the US President meet with China President by end of October",
@@ -23,7 +23,7 @@ export const MARKETS: Market[] = [
     resolutionDate: "2025-10-31",
   },
   {
-    id: "2",
+    id: 2,
     slug: "tesla-earnings",
     title: "Will Tesla (TSLA) beat quarterly earnings?",
     description: "Will Tesla beat Q3 2025 earnings expectations",
@@ -34,7 +34,7 @@ export const MARKETS: Market[] = [
     resolutionDate: "2025-10-15",
   },
   {
-    id: "3",
+    id: 3,
     slug: "bitcoin-100k",
     title: "Bitcoin above $100k by year end?",
     description: "Will Bitcoin price reach or exceed $100,000 by December 31, 2025",
@@ -45,7 +45,7 @@ export const MARKETS: Market[] = [
     resolutionDate: "2025-12-31",
   },
   {
-    id: "4",
+    id: 4,
     slug: "fed-rate-cut",
     title: "Fed will cut rates in Q4 2025?",
     description: "Will the Federal Reserve cut interest rates in Q4 2025",
@@ -56,7 +56,7 @@ export const MARKETS: Market[] = [
     resolutionDate: "2025-12-31",
   },
   {
-    id: "5",
+    id: 5,
     slug: "liverpool-premier-league",
     title: "Liverpool wins Premier League 2025-26?",
     description: "Will Liverpool FC win the Premier League title in 2025-26 season",
@@ -67,7 +67,7 @@ export const MARKETS: Market[] = [
     resolutionDate: "2026-05-31",
   },
   {
-    id: "6",
+    id: 6,
     slug: "unemployment-below-4",
     title: "US unemployment below 4% by year end?",
     description: "Will US unemployment rate stay below 4% through December 2025",
@@ -78,7 +78,7 @@ export const MARKETS: Market[] = [
     resolutionDate: "2025-12-31",
   },
   {
-    id: "7",
+    id: 7,
     slug: "ethereum-5k",
     title: "Ethereum above $5,000 by next year?",
     description: "Will Ethereum price reach or exceed $5,000 by January 1, 2026",
@@ -89,7 +89,7 @@ export const MARKETS: Market[] = [
     resolutionDate: "2026-01-01",
   },
   {
-    id: "8",
+    id: 8,
     slug: "openai-new-model",
     title: "New AI model release from OpenAI?",
     description: "Will OpenAI release a new major AI model by end of 2025",
