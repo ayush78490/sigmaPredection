@@ -1,5 +1,5 @@
 // lib/web3/config.ts
-export const PREDICTION_MARKET_ADDRESS = "0xf8760d03840297906c5Ab1F195c62FB92df6B1F0";
+export const PREDICTION_MARKET_ADDRESS = "0x52Ca4B7673646B8b922ea00ccef6DD0375B14619";
 
 export const PREDICTION_MARKET_ABI = [
   // Market Creation

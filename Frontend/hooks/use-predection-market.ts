@@ -347,6 +347,7 @@ export function usePredictionMarket() {
     return await tx.wait()
   }, [signer, isCorrectNetwork])
 
+
   return {
     // Core functions
     createMarket,
@@ -367,6 +368,6 @@ export function usePredictionMarket() {
     
     // Constants
     MarketStatus,
-    Outcome
+    Outcome,
   }
 }

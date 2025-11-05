@@ -176,40 +176,7 @@ export default function Home() {
           </Button>
         </div>
 
-        {/* Wallet Connection Prompt */}
-        {!account && isInitialized && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-yellow-800 font-semibold">Wallet Not Connected</h3>
-                <p className="text-yellow-700 text-sm mt-1">
-                  Connect your wallet to view and create prediction markets.
-                </p>
-              </div>
-              <Button 
-                onClick={connectWallet}
-                disabled={isConnecting}
-                className="bg-yellow-600 text-white hover:bg-yellow-700"
-              >
-                {isConnecting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Wallet className="w-4 h-4 mr-2" />
-                    Connect Wallet
-                  </>
-                )}
-              </Button>
-            </div>
-            {web3Error && (
-              <p className="text-red-600 text-sm mt-2">{web3Error}</p>
-            )}
-          </div>
-        )}
-
+        
         {/* Network Warning */}
         {account && !isCorrectNetwork && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -278,31 +245,6 @@ export default function Home() {
                   {category}
                 </Button>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* Connection Status */}
-        {account && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-sm text-blue-700">
-                  Wallet: {account.slice(0, 6)}...{account.slice(-4)}
-                </span>
-                <span className="text-sm text-blue-600 ml-4">
-                  Contract: {isContractReady ? 'Connected ✓' : 'Connecting...'}
-                </span>
-                <span className="text-sm text-blue-600 ml-4">
-                  Network: {isCorrectNetwork ? 'Correct ✓' : 'Wrong Network'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isContractReady ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                <span className="text-xs text-blue-600">
-                  {isContractReady ? 'Ready' : 'Connecting...'}
-                </span>
-              </div>
             </div>
           </div>
         )}
