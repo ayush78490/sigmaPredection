@@ -399,6 +399,7 @@ const getUserPositions = useCallback(async (userAddress: string) => {
 }, [contract, getMarket, provider, signer])
 
 
+
   return {
     // Core functions
     createMarket,
@@ -420,6 +421,6 @@ const getUserPositions = useCallback(async (userAddress: string) => {
     
     // Constants
     MarketStatus,
-    Outcome
+    Outcome,
   }
 }

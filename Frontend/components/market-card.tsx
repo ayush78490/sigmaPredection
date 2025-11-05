@@ -50,14 +50,14 @@ export default function MarketCard({ market }: MarketCardProps) {
             {/* YES */}
             <div className="bg-green-950/30 rounded-lg p-3 border border-green-900">
               <div className="text-xs text-muted-foreground mb-1">YES</div>
-              <div className="text-2xl font-bold text-green-500">{market.yesOdds}%</div>
+              <div className="text-2xl font-bold text-green-500">{market.yesOdds.toFixed(2)}%</div>
               <div className="text-xs text-green-400 mt-1">{(market.yesOdds / 100).toFixed(2)} price</div>
             </div>
 
             {/* NO */}
             <div className="bg-red-950/30 rounded-lg p-3 border border-red-900">
               <div className="text-xs text-muted-foreground mb-1">NO</div>
-              <div className="text-2xl font-bold text-red-500">{market.noOdds}%</div>
+              <div className="text-2xl font-bold text-red-500">{market.noOdds.toFixed(2)}%</div>
               <div className="text-xs text-red-400 mt-1">{(market.noOdds / 100).toFixed(2)} price</div>
             </div>
           </div>
