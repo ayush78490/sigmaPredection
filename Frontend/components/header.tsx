@@ -59,6 +59,14 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Portfolio Link */}
+          <Link href="/profile">
+            <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground">
+              Portfolio
+            </Button>
+          </Link>
+
+          {/* Wallet Section */}
           {account ? (
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" disabled>

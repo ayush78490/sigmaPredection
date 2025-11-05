@@ -346,6 +346,58 @@ export function usePredictionMarket() {
     
     return await tx.wait()
   }, [signer, isCorrectNetwork])
+  // Get user's positions across all markets
+const getUserPositions = useCallback(async (userAddress: string) => {
+  if (!contract) throw new Error('Contract not available')
+  
+  try {
+    const nextId = await contract.nextMarketId()
+    const marketCount = Number(nextId)
+    const positions = []
+    
+    for (let i = 0; i < marketCount; i++) {
+      try {
+        const market = await getMarket(i)
+        
+        // Get YES and NO token balances for this user
+        const yesTokenContract = new ethers.Contract(
+          market.yesToken,
+          ['function balanceOf(address) view returns (uint256)'],
+          provider || signer
+        )
+        const noTokenContract = new ethers.Contract(
+          market.noToken,
+          ['function balanceOf(address) view returns (uint256)'],
+          provider || signer
+        )
+        
+        const yesBalance = await yesTokenContract.balanceOf(userAddress)
+        const noBalance = await noTokenContract.balanceOf(userAddress)
+        
+        const yesBalanceFormatted = ethers.formatEther(yesBalance)
+        const noBalanceFormatted = ethers.formatEther(noBalance)
+        
+        // Only include markets where user has a position
+        if (parseFloat(yesBalanceFormatted) > 0 || parseFloat(noBalanceFormatted) > 0) {
+          positions.push({
+            market,
+            yesBalance: yesBalanceFormatted,
+            noBalance: noBalanceFormatted,
+            totalInvested: (parseFloat(yesBalanceFormatted) + parseFloat(noBalanceFormatted)).toFixed(4)
+          })
+        }
+      } catch (err) {
+        console.warn(`Failed to get position for market ${i}:`, err)
+      }
+    }
+    
+    return positions
+  } catch (error) {
+    console.error('Error fetching user positions:', error)
+    throw error
+  }
+}, [contract, getMarket, provider, signer])
+
 
   return {
     // Core functions
@@ -353,6 +405,7 @@ export function usePredictionMarket() {
     getMarket,
     getAllMarkets,
     getAmountOut,
+    getUserPositions,
     
     // Trading functions
     mintCompleteSets,
