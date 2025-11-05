@@ -2,7 +2,6 @@
 import { Card } from "@/components/ui/card"
 import { TrendingUp, Volume2 } from "lucide-react"
 import Link from "next/link"
-import React from "react"
 import type { MARKETS } from "@/lib/markets"
 
 interface Market {
@@ -22,9 +21,6 @@ interface MarketCardProps {
 }
 
 export default function MarketCard({ market }: MarketCardProps) {
-  const yes = typeof market.yesOdds === "number" ? market.yesOdds : 50
-  const no = typeof market.noOdds === "number" ? market.noOdds : 50
-
   const formatVolume = (vol: number) => {
     if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}m`
     if (vol >= 1000) return `$${(vol / 1000).toFixed(1)}k`
