@@ -46,6 +46,35 @@ export interface MarketCreationParams {
   initialNo: string
 }
 
+// Add this helper function at the top of the file, after imports
+async function validateMarketWithPerplexity(params: MarketCreationParams): Promise<{ valid: boolean, reason?: string }> {
+  try {
+    const res = await fetch('http://localhost:3001/api/validate-market', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    })
+
+    if (!res.ok) {
+      // Try to get error message from response
+      let errorMessage = 'Failed to validate market with AI'
+      try {
+        const errorData = await res.json()
+        errorMessage = errorData.reason || errorData.error || errorMessage
+      } catch {
+        // If response isn't JSON, use status text
+        errorMessage = res.statusText || errorMessage
+      }
+      throw new Error(errorMessage)
+    }
+
+    return await res.json()
+  } catch (error: any) {
+    console.error('Validation request failed:', error)
+    throw new Error(error.message || 'Network error during validation')
+  }
+}
+
 export function usePredictionMarket() {
   const { account, provider, signer, isCorrectNetwork } = useWeb3Context()
   const [isLoading, setIsLoading] = useState(false)
@@ -112,64 +141,58 @@ export function usePredictionMarket() {
     if (!signer || !account || !isCorrectNetwork) {
       throw new Error('Wallet not connected or wrong network')
     }
-
     if (!isContractReady) {
       throw new Error('Contract not ready - please ensure you\'re on BSC Testnet')
     }
 
     setIsLoading(true)
     try {
-      // Create a new contract instance with signer
+      console.log('🤖 Validating market question with AI...')
+      const validation = await validateMarketWithPerplexity(params)
+      if (!validation.valid) {
+        console.error('❌ AI validation failed:', validation.reason)
+        throw new Error(validation.reason || 'Market question did not pass AI validation')
+      }
+      console.log('✅ AI validation passed')
+
+      // Create contract instance with signer
       const contractWithSigner = new ethers.Contract(
         PREDICTION_MARKET_ADDRESS,
         PREDICTION_MARKET_ABI,
         signer
       )
-      
-      // Convert BNB amounts to wei
+
+      // Convert amounts to wei
       const initialYesWei = ethers.parseEther(params.initialYes)
       const initialNoWei = ethers.parseEther(params.initialNo)
       const totalValue = initialYesWei + initialNoWei
 
-      console.log('📝 Creating market...', {
-        question: params.question,
-        endTime: params.endTime,
-        initialYes: params.initialYes,
-        initialNo: params.initialNo
-      })
-
-      // Use type assertion for the method call
+      console.log('📝 Creating market onchain...')
       const tx = await (contractWithSigner as any).createMarket(
         params.question,
         BigInt(params.endTime),
         initialYesWei,
         initialNoWei,
-        { 
-          value: totalValue 
-        }
+        { value: totalValue }
       )
 
-      console.log('⏳ Transaction sent:', tx.hash)
-
-      // Wait for confirmation
+      console.log('⏳ Waiting for transaction confirmation...')
       const receipt = await tx.wait()
-      
-      // Get market ID from events or fallback
+
       let marketId: number
       const marketCreatedTopic = ethers.id('MarketCreated(uint256,string,address,address,uint256)')
       const event = receipt?.logs.find((log: any) => log.topics[0] === marketCreatedTopic)
-      
+
       if (event) {
         const iface = new ethers.Interface(PREDICTION_MARKET_ABI)
         const decodedEvent = iface.parseLog(event)
         marketId = Number(decodedEvent?.args.id)
       } else {
-        // Fallback: get the latest market ID
         const nextId = await (contractWithSigner as any).nextMarketId()
         marketId = Number(nextId) - 1
       }
 
-      console.log('✅ Market created with ID:', marketId)
+      console.log('✅ Market created successfully with ID:', marketId)
       return marketId
 
     } catch (error: any) {
