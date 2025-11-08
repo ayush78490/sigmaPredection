@@ -5,7 +5,7 @@ import path from "path";
 const extractABI = (): void => {
   try {
     // Path to your contract artifact
-    const artifactPath = path.join(__dirname, "..", "artifacts", "contracts", "Bazar.sol", "PredictionMarketFactory.json");
+    const artifactPath = path.join(__dirname, "..", "artifacts", "contracts", "Bazar.sol", "PredictionMarketWithMultipliers.json");
     
     if (!fs.existsSync(artifactPath)) {
       console.log("❌ Contract artifact not found. Please compile first:");

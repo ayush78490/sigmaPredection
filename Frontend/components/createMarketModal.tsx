@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { X, Loader2, Plus } from "lucide-react"
+import { X, Loader2, Plus, Shield, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,12 @@ interface CreateMarketModalProps {
   onSuccess?: (marketId: number) => void
 }
 
+interface ValidationResult {
+  valid: boolean;
+  reason?: string;
+  category?: string;
+}
+
 export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketModalProps) {
   const [question, setQuestion] = useState("")
   const [endDate, setEndDate] = useState("")
@@ -21,8 +27,10 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
   const [initialYes, setInitialYes] = useState("0.1")
   const [initialNo, setInitialNo] = useState("0.1")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isValidating, setIsValidating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
 
   // Get unified Web3 context
   const { account, connectWallet, isConnecting, isCorrectNetwork, switchNetwork } = useWeb3Context()
@@ -32,6 +40,48 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
   const totalLiquidity = parseFloat(initialYes || "0") + parseFloat(initialNo || "0")
   const yesPercent = totalLiquidity > 0 ? (parseFloat(initialYes || "0") / totalLiquidity) * 100 : 50
   const noPercent = 100 - yesPercent
+
+  // Validate question with AI
+  const validateQuestion = async () => {
+    if (!question || question.length < 10) {
+      setError("Question must be at least 10 characters")
+      return false
+    }
+
+    if (question.length > 280) {
+      setError("Question must be less than 280 characters")
+      return false
+    }
+
+    if (!endDate || !endTime) {
+      setError("Please set an end date and time first")
+      return false
+    }
+
+    const endDateTime = new Date(`${endDate}T${endTime}`)
+    const endTimeUnix = Math.floor(endDateTime.getTime() / 1000)
+
+    setIsValidating(true)
+    setError(null)
+    setValidationResult(null)
+
+    try {
+      // This will be handled by the createMarket function now
+      // We'll just do basic validation here
+      setValidationResult({
+        valid: true,
+        reason: "Question format looks good. Full AI validation will happen during creation.",
+        category: "GENERAL"
+      })
+      return true
+    } catch (err: any) {
+      console.error('Validation error:', err)
+      setError('Failed to validate question. Please try again.')
+      return false
+    } finally {
+      setIsValidating(false)
+    }
+  }
 
   const handleCreate = async () => {
     // Step 1: Check if wallet is connected
@@ -102,6 +152,7 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
       
       console.log("📝 Creating market with params:", {
         question,
+        category: "GENERAL", // Will be determined by AI validation
         endTime: endTimeUnix,
         initialYes,
         initialNo
@@ -109,6 +160,7 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
 
       const marketId = await createMarket({
         question,
+        category: "GENERAL", // Temporary category, will be overridden by AI
         endTime: endTimeUnix,
         initialYes,
         initialNo
@@ -153,13 +205,32 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
         <div className="space-y-6">
           {/* Question Section */}
           <div>
-            <label className="text-sm font-medium mb-2 block">
-              Market Question <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium">
+                Market Question <span className="text-red-500">*</span>
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={validateQuestion}
+                disabled={isValidating || !question || question.length < 10}
+              >
+                {isValidating ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Shield className="w-4 h-4 mr-2" />
+                )}
+                Validate
+              </Button>
+            </div>
             <Textarea
               placeholder="Will Bitcoin reach $100k by end of 2024?"
               value={question}
-              onChange={(e) => setQuestion(e.target.value)}
+              onChange={(e) => {
+                setQuestion(e.target.value)
+                setValidationResult(null) // Clear validation when question changes
+              }}
               className="min-h-[100px]"
               maxLength={280}
               disabled={isProcessing}
@@ -168,6 +239,34 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
               {question.length}/280 characters
             </div>
           </div>
+
+          {/* Validation Result */}
+          {validationResult && (
+            <div className={`p-3 rounded-lg border ${
+              validationResult.valid 
+                ? 'bg-green-950/20 border-green-500 text-green-400' 
+                : 'bg-red-950/20 border-red-500 text-red-400'
+            }`}>
+              <div className="flex items-start gap-2">
+                {validationResult.valid ? (
+                  <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                )}
+                <div>
+                  <div className="font-medium">
+                    {validationResult.valid ? '✓ Basic Validation Passed' : '✗ Validation Failed'}
+                  </div>
+                  <div className="text-sm mt-1">{validationResult.reason}</div>
+                  {validationResult.valid && validationResult.category && (
+                    <div className="text-sm mt-1">
+                      <strong>Category:</strong> {validationResult.category}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* End Date & Time Section */}
           <div className="grid grid-cols-2 gap-4">
@@ -234,12 +333,24 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
                   <span className="font-semibold">{totalLiquidity.toFixed(4)} BNB</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Initial YES odds:</span>
+                  <span className="text-muted-foreground">Initial YES Price:</span>
                   <span className="font-semibold text-green-500">{yesPercent.toFixed(1)}%</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Initial NO odds:</span>
+                  <span className="text-muted-foreground">Initial NO Price:</span>
                   <span className="font-semibold text-red-500">{noPercent.toFixed(1)}%</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">YES Multiplier:</span>
+                  <span className="font-semibold text-green-500">
+                    {yesPercent > 0 ? (100 / yesPercent).toFixed(2) : '∞'}x
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">NO Multiplier:</span>
+                  <span className="font-semibold text-red-500">
+                    {noPercent > 0 ? (100 / noPercent).toFixed(2) : '∞'}x
+                  </span>
                 </div>
               </div>
             )}
@@ -249,15 +360,17 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
           <div className="p-4 bg-blue-950/20 border border-blue-500 rounded-lg">
             <h3 className="font-semibold text-blue-400 mb-2">How it works:</h3>
             <ul className="text-sm text-blue-300 space-y-1 list-disc list-inside">
+              <li>Questions are validated by AI to ensure quality and clarity</li>
               <li>You'll provide initial liquidity to start the market</li>
-              <li>The ratio of YES/NO liquidity sets the initial odds</li>
+              <li>The ratio of YES/NO liquidity sets the initial odds and multipliers</li>
               <li>You'll receive LP tokens representing your liquidity share</li>
               <li>Traders pay fees that go to liquidity providers</li>
+              <li>Markets are automatically resolved by AI after the end time</li>
             </ul>
           </div>
 
           {/* Error Display */}
-          {error && (
+          {error && !validationResult && (
             <div className="p-3 bg-red-950/20 border border-red-500 rounded-lg text-red-400 text-sm">
               {error}
             </div>

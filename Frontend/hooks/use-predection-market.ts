@@ -6,26 +6,26 @@ import PREDICTION_MARKET_ABI from '../contracts/abi.json'
 // Contract address
 const PREDICTION_MARKET_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0x52Ca4B7673646B8b922ea00ccef6DD0375B14619'
 
-// Types
+// Updated Types to match new contract
 export enum MarketStatus {
   Open = 0,
   Closed = 1,
-  Proposed = 2,
-  Disputed = 3,
-  Resolved = 4
+  ResolutionRequested = 2,
+  Resolved = 3,
+  Disputed = 4
 }
 
 export enum Outcome {
   Undecided = 0,
   Yes = 1,
-  No = 2,
-  Invalid = 3
+  No = 2
 }
 
 export interface Market {
   id: number
   creator: string
   question: string
+  category: string
   endTime: number
   status: MarketStatus
   outcome: Outcome
@@ -35,34 +35,60 @@ export interface Market {
   noPool: string
   lpTotalSupply: string
   totalBacking: string
+  platformFees: string
+  resolutionRequestedAt: number
+  disputeDeadline: number
+  resolutionReason: string
+  resolutionConfidence: number
   yesPrice?: number
   noPrice?: number
+  yesMultiplier?: number
+  noMultiplier?: number
 }
 
 export interface MarketCreationParams {
   question: string
+  category: string
   endTime: number
   initialYes: string
   initialNo: string
 }
 
-// Add this helper function at the top of the file, after imports
-async function validateMarketWithPerplexity(params: MarketCreationParams): Promise<{ valid: boolean, reason?: string }> {
+export interface MultiplierInfo {
+  multiplier: number
+  totalOut: string
+  totalFee: string
+}
+
+export interface TradingInfo {
+  yesMultiplier: number
+  noMultiplier: number
+  yesPrice: number
+  noPrice: number
+  totalLiquidity: string
+}
+
+export interface SwapMultiplierInfo {
+  multiplier: number
+  amountOut: string
+  fee: string
+}
+
+// AI Validation Helper
+async function validateMarketWithPerplexity(params: MarketCreationParams): Promise<{ valid: boolean, reason?: string, category?: string }> {
   try {
-    const res = await fetch('http://localhost:3001/api/validate-market', {
+    const res = await fetch('https://sigma-predection.vercel.app/api/validate-market', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params)
     })
 
     if (!res.ok) {
-      // Try to get error message from response
       let errorMessage = 'Failed to validate market with AI'
       try {
         const errorData = await res.json()
         errorMessage = errorData.reason || errorData.error || errorMessage
       } catch {
-        // If response isn't JSON, use status text
         errorMessage = res.statusText || errorMessage
       }
       throw new Error(errorMessage)
@@ -94,7 +120,6 @@ export function usePredictionMarket() {
       try {
         console.log("🔍 Initializing contract with address:", PREDICTION_MARKET_ADDRESS)
         
-        // Check if we're on the correct network
         const network = await provider.getNetwork()
         console.log("🌐 Current network chain ID:", network.chainId)
         
@@ -109,10 +134,9 @@ export function usePredictionMarket() {
         const predictionMarketContract = new ethers.Contract(
           PREDICTION_MARKET_ADDRESS,
           PREDICTION_MARKET_ABI,
-          signer
+          provider
         )
         
-        // Test the contract connection
         try {
           const nextId = await (predictionMarketContract as any).nextMarketId()
           console.log("✅ Contract connection successful. Next market ID:", Number(nextId))
@@ -134,23 +158,8 @@ export function usePredictionMarket() {
     initializeContract()
   }, [provider])
 
-  // Get price for a market
-  const getPrice = useCallback(async (marketId: number) => {
-    if (!contract) throw new Error('Contract not available')
-    
-    try {
-      const [yesPriceRaw, noPriceRaw] = await (contract as any).getPrice(BigInt(marketId))
-      return {
-        yesPrice: Number(yesPriceRaw) / 10000,
-        noPrice: Number(noPriceRaw) / 10000
-      }
-    } catch (error) {
-      console.error('❌ Error fetching price:', error)
-      throw error
-    }
-  }, [contract])
+  // ==================== MARKET CREATION ====================
 
-  // Market Creation
   const createMarket = useCallback(async (
     params: MarketCreationParams
   ): Promise<number> => {
@@ -169,9 +178,8 @@ export function usePredictionMarket() {
         console.error('❌ AI validation failed:', validation.reason)
         throw new Error(validation.reason || 'Market question did not pass AI validation')
       }
-      console.log('✅ AI validation passed')
+      console.log('✅ AI validation passed. Category:', validation.category)
 
-      // Create contract instance with signer
       const contractWithSigner = new ethers.Contract(
         PREDICTION_MARKET_ADDRESS,
         PREDICTION_MARKET_ABI,
@@ -186,6 +194,7 @@ export function usePredictionMarket() {
       console.log('📝 Creating market onchain...')
       const tx = await (contractWithSigner as any).createMarket(
         params.question,
+        validation.category || 'OTHER', // Use AI-determined category
         BigInt(params.endTime),
         initialYesWei,
         initialNoWei,
@@ -196,7 +205,7 @@ export function usePredictionMarket() {
       const receipt = await tx.wait()
 
       let marketId: number
-      const marketCreatedTopic = ethers.id('MarketCreated(uint256,string,address,address,uint256)')
+      const marketCreatedTopic = ethers.id('MarketCreated(uint256,string,string,address,address,uint256)')
       const event = receipt?.logs.find((log: any) => log.topics[0] === marketCreatedTopic)
 
       if (event) {
@@ -219,174 +228,202 @@ export function usePredictionMarket() {
     }
   }, [signer, account, isCorrectNetwork, isContractReady])
 
-  // Get Single Market
+  // ==================== MARKET DATA FETCHING ====================
+
   const getMarket = useCallback(async (marketId: number): Promise<Market> => {
     if (!contract) throw new Error('Contract not available')
 
     try {
       console.log(`📊 Fetching market ${marketId}...`)
-      // Use type assertion for the method call
-      const marketData = await (contract as any).getMarket(BigInt(marketId))
+      const marketData = await (contract as any).markets(BigInt(marketId))
       
-      // Calculate prices
-      const yesPool = parseFloat(ethers.formatEther(marketData[7]))
-      const noPool = parseFloat(ethers.formatEther(marketData[8]))
-      const totalPool = yesPool + noPool
-      const yesPrice = totalPool > 0 ? (noPool / totalPool) * 100 : 50
-      const noPrice = totalPool > 0 ? (yesPool / totalPool) * 100 : 50
+      console.log(`Raw market data for ${marketId}:`, marketData)
 
-      return {
-        id: marketId,
-        creator: marketData[0],
-        question: marketData[1],
-        endTime: Number(marketData[2]),
-        status: marketData[3],
-        outcome: marketData[4],
-        yesToken: marketData[5],
-        noToken: marketData[6],
-        yesPool: ethers.formatEther(marketData[7]),
-        noPool: ethers.formatEther(marketData[8]),
-        lpTotalSupply: ethers.formatEther(marketData[9]),
-        totalBacking: ethers.formatEther(marketData[10]),
-        yesPrice,
-        noPrice
+      // FIX: Remove quotes from the question
+      let question = marketData[1] || `Market ${marketId}`
+      // Remove surrounding quotes if they exist
+      if (typeof question === 'string' && question.startsWith('"') && question.endsWith('"')) {
+        question = question.slice(1, -1)
       }
+
+      // Calculate prices and multipliers
+      const yesPool = parseFloat(ethers.formatEther(marketData[8] || 0))
+      const noPool = parseFloat(ethers.formatEther(marketData[9] || 0))
+      const totalPool = yesPool + noPool
+      
+      const yesPrice = totalPool > 0 ? (yesPool / totalPool) * 100 : 50
+      const noPrice = totalPool > 0 ? (noPool / totalPool) * 100 : 50
+      
+      const yesMultiplier = yesPrice > 0 ? 100 / yesPrice : 0
+      const noMultiplier = noPrice > 0 ? 100 / noPrice : 0
+
+      const market: Market = {
+        id: marketId,
+        creator: marketData[0] || "0x0000000000000000000000000000000000000000",
+        question: question, // Use the cleaned question
+        category: marketData[2] || "General",
+        endTime: Number(marketData[3] || 0),
+        status: marketData[4] || MarketStatus.Open,
+        outcome: marketData[5] || Outcome.Undecided,
+        yesToken: marketData[6] || "0x0000000000000000000000000000000000000000",
+        noToken: marketData[7] || "0x0000000000000000000000000000000000000000",
+        yesPool: ethers.formatEther(marketData[8] || 0),
+        noPool: ethers.formatEther(marketData[9] || 0),
+        lpTotalSupply: ethers.formatEther(marketData[10] || 0),
+        totalBacking: ethers.formatEther(marketData[11] || 0),
+        platformFees: ethers.formatEther(marketData[12] || 0),
+        resolutionRequestedAt: Number(marketData[13] || 0),
+        disputeDeadline: Number(marketData[14] || 0),
+        resolutionReason: marketData[15] || '',
+        resolutionConfidence: Number(marketData[16] || 0),
+        yesPrice,
+        noPrice,
+        yesMultiplier,
+        noMultiplier
+      }
+
+      console.log(`Processed market ${marketId}:`, market)
+      return market
+
     } catch (error) {
       console.error('❌ Error fetching market:', error)
       throw error
     }
   }, [contract])
 
-  // Get All Markets
-  const getAllMarkets = useCallback(async (): Promise<Market[]> => {
-    if (!contract || !isContractReady) {
-      console.error("❌ Contract not available or not ready")
-      throw new Error("Contract not available - please connect to BSC Testnet and ensure contract is deployed")
-    }
+  // ==================== MULTIPLIER & PRICE CALCULATIONS ====================
 
-    try {
-      console.log("📋 Fetching all markets...")
-      const nextId = await (contract as any).nextMarketId()
-      const marketCount = Number(nextId)
-      console.log(`Found ${marketCount} markets on chain`)
-      
-      if (marketCount === 0) {
-        console.log("ℹ️ No markets created yet - this is normal for new deployment")
-        return []
-      }
-
-      const markets: Market[] = []
-      for (let i = 0; i < marketCount; i++) {
-        try {
-          const market = await getMarket(i)
-          markets.push(market)
-          console.log(`✅ Loaded market ${i}`)
-        } catch (error) {
-          console.warn(`⚠️ Failed to fetch market ${i}:`, error)
-          // Continue with other markets even if one fails
-        }
-      }
-      
-      console.log(`✅ Successfully loaded ${markets.length} markets`)
-      return markets
-      
-    } catch (error) {
-      console.error("❌ Error fetching all markets:", error)
-      throw error
-    }
-  }, [contract, isContractReady, getMarket])
-
-  // Get output amount for swap
-  const getAmountOut = useCallback(async (
+  const getBuyYesMultiplier = useCallback(async (
     marketId: number, 
-    amountIn: string, 
-    isYesIn: boolean
-  ) => {
+    bnbAmount: string
+  ): Promise<MultiplierInfo> => {
     if (!contract) throw new Error('Contract not available')
     
     try {
-      const amountInWei = ethers.parseEther(amountIn)
-      const result = await (contract as any).getAmountOut(BigInt(marketId), amountInWei, isYesIn)
+      const amountInWei = ethers.parseEther(bnbAmount)
+      const result = await (contract as any).getBuyYesMultiplier(BigInt(marketId), amountInWei)
       
       return {
-        amountOut: ethers.formatEther(result[0]),
-        fee: ethers.formatEther(result[1])
+        multiplier: Number(result[0]) / 10000, // Convert from scaled value (15000 = 1.5x)
+        totalOut: ethers.formatEther(result[1]),
+        totalFee: ethers.formatEther(result[2])
       }
     } catch (error) {
-      console.error('❌ Error calculating amount out:', error)
+      console.error('❌ Error calculating YES multiplier:', error)
       throw error
     }
   }, [contract])
 
-  // Trading functions
-  const mintCompleteSets = useCallback(async (marketId: number, amount: string) => {
-    if (!signer || !isCorrectNetwork) throw new Error('Wallet not connected or wrong network')
-    
-    const contractWithSigner = new ethers.Contract(
-      PREDICTION_MARKET_ADDRESS,
-      PREDICTION_MARKET_ABI,
-      signer
-    )
-    
-    const amountWei = ethers.parseEther(amount)
-    
-    const tx = await (contractWithSigner as any).mintCompleteSets(BigInt(marketId), amountWei, {
-      value: amountWei
-    })
-    return await tx.wait()
-  }, [signer, isCorrectNetwork])
-
-  const burnCompleteSets = useCallback(async (marketId: number, amount: string) => {
-    if (!signer || !isCorrectNetwork) throw new Error('Wallet not connected or wrong network')
-    
-    const contractWithSigner = new ethers.Contract(
-      PREDICTION_MARKET_ADDRESS,
-      PREDICTION_MARKET_ABI,
-      signer
-    )
-    
-    const amountWei = ethers.parseEther(amount)
-    
-    const tx = await (contractWithSigner as any).burnCompleteSets(BigInt(marketId), amountWei)
-    return await tx.wait()
-  }, [signer, isCorrectNetwork])
-
-  const swapTokens = useCallback(async (
+  const getBuyNoMultiplier = useCallback(async (
     marketId: number, 
-    amountIn: string, 
-    minOut: string, 
-    isYesIn: boolean
-  ) => {
-    if (!signer || !isCorrectNetwork) throw new Error('Wallet not connected or wrong network')
+    bnbAmount: string
+  ): Promise<MultiplierInfo> => {
+    if (!contract) throw new Error('Contract not available')
     
-    const contractWithSigner = new ethers.Contract(
-      PREDICTION_MARKET_ADDRESS,
-      PREDICTION_MARKET_ABI,
-      signer
-    )
-    
-    const amountInWei = ethers.parseEther(amountIn)
-    const minOutWei = ethers.parseEther(minOut)
-    
-    let tx
-    if (isYesIn) {
-      tx = await (contractWithSigner as any).swapYesForNo(
-        BigInt(marketId), 
-        amountInWei, 
-        minOutWei
-      )
-    } else {
-      tx = await (contractWithSigner as any).swapNoForYes(
-        BigInt(marketId), 
-        amountInWei, 
-        minOutWei
-      )
+    try {
+      const amountInWei = ethers.parseEther(bnbAmount)
+      const result = await (contract as any).getBuyNoMultiplier(BigInt(marketId), amountInWei)
+      
+      return {
+        multiplier: Number(result[0]) / 10000,
+        totalOut: ethers.formatEther(result[1]),
+        totalFee: ethers.formatEther(result[2])
+      }
+    } catch (error) {
+      console.error('❌ Error calculating NO multiplier:', error)
+      throw error
     }
-    
-    return await tx.wait()
-  }, [signer, isCorrectNetwork])
+  }, [contract])
 
-  // Direct trading functions
+  const getCurrentMultipliers = useCallback(async (
+    marketId: number
+  ): Promise<{ yesMultiplier: number; noMultiplier: number; yesPrice: number; noPrice: number }> => {
+    if (!contract) throw new Error('Contract not available')
+    
+    try {
+      const result = await (contract as any).getCurrentMultipliers(BigInt(marketId))
+      
+      return {
+        yesMultiplier: Number(result[0]) / 10000,
+        noMultiplier: Number(result[1]) / 10000,
+        yesPrice: Number(result[2]) / 100, // Convert from basis points to percentage
+        noPrice: Number(result[3]) / 100
+      }
+    } catch (error) {
+      console.error('❌ Error fetching current multipliers:', error)
+      throw error
+    }
+  }, [contract])
+
+  const getTradingInfo = useCallback(async (marketId: number): Promise<TradingInfo> => {
+    if (!contract) throw new Error('Contract not available')
+    
+    try {
+      const result = await (contract as any).getTradingInfo(BigInt(marketId))
+      
+      return {
+        yesMultiplier: Number(result[0]) / 10000,
+        noMultiplier: Number(result[1]) / 10000,
+        yesPrice: Number(result[2]) / 100,
+        noPrice: Number(result[3]) / 100,
+        totalLiquidity: ethers.formatEther(result[4])
+      }
+    } catch (error) {
+      console.error('❌ Error fetching trading info:', error)
+      throw error
+    }
+  }, [contract])
+
+  const getSwapMultiplier = useCallback(async (
+    marketId: number,
+    amountIn: string,
+    isYesIn: boolean
+  ): Promise<SwapMultiplierInfo> => {
+    if (!contract) throw new Error('Contract not available')
+    
+    try {
+      const amountInWei = ethers.parseEther(amountIn)
+      const result = await (contract as any).getSwapMultiplier(BigInt(marketId), amountInWei, isYesIn)
+      
+      return {
+        multiplier: Number(result[0]) / 10000,
+        amountOut: ethers.formatEther(result[1]),
+        fee: ethers.formatEther(result[2])
+      }
+    } catch (error) {
+      console.error('❌ Error calculating swap multiplier:', error)
+      throw error
+    }
+  }, [contract])
+
+  // ==================== PRICE CALCULATIONS ====================
+
+  const getYesPrice = useCallback(async (marketId: number): Promise<number> => {
+    if (!contract) throw new Error('Contract not available')
+    
+    try {
+      const price = await (contract as any).getYesPrice(BigInt(marketId))
+      return Number(price) / 100 // Convert from basis points to percentage
+    } catch (error) {
+      console.error('❌ Error fetching YES price:', error)
+      throw error
+    }
+  }, [contract])
+
+  const getNoPrice = useCallback(async (marketId: number): Promise<number> => {
+    if (!contract) throw new Error('Contract not available')
+    
+    try {
+      const price = await (contract as any).getNoPrice(BigInt(marketId))
+      return Number(price) / 100 // Convert from basis points to percentage
+    } catch (error) {
+      console.error('❌ Error fetching NO price:', error)
+      throw error
+    }
+  }, [contract])
+
+  // ==================== TRADING FUNCTIONS ====================
+
   const buyYesWithBNB = useCallback(async (
     marketId: number,
     minTokensOut: string,
@@ -437,7 +474,108 @@ export function usePredictionMarket() {
     return await tx.wait()
   }, [signer, isCorrectNetwork])
 
-  // Get user's positions across all markets
+  const swapTokens = useCallback(async (
+    marketId: number, 
+    amountIn: string, 
+    minOut: string, 
+    isYesIn: boolean
+  ) => {
+    if (!signer || !isCorrectNetwork) throw new Error('Wallet not connected or wrong network')
+    
+    const contractWithSigner = new ethers.Contract(
+      PREDICTION_MARKET_ADDRESS,
+      PREDICTION_MARKET_ABI,
+      signer
+    )
+    
+    const amountInWei = ethers.parseEther(amountIn)
+    const minOutWei = ethers.parseEther(minOut)
+    
+    let tx
+    if (isYesIn) {
+      tx = await (contractWithSigner as any).swapYesForNo(
+        BigInt(marketId), 
+        amountInWei, 
+        minOutWei
+      )
+    } else {
+      tx = await (contractWithSigner as any).swapNoForYes(
+        BigInt(marketId), 
+        amountInWei, 
+        minOutWei
+      )
+    }
+    
+    return await tx.wait()
+  }, [signer, isCorrectNetwork])
+
+  // ==================== AI RESOLUTION SYSTEM ====================
+
+  const requestResolution = useCallback(async (marketId: number) => {
+    if (!signer || !isCorrectNetwork) throw new Error('Wallet not connected or wrong network')
+    
+    const contractWithSigner = new ethers.Contract(
+      PREDICTION_MARKET_ADDRESS,
+      PREDICTION_MARKET_ABI,
+      signer
+    )
+    
+    const tx = await (contractWithSigner as any).requestResolution(BigInt(marketId))
+    return await tx.wait()
+  }, [signer, isCorrectNetwork])
+
+  const initiateDispute = useCallback(async (marketId: number, reason: string) => {
+    if (!signer || !isCorrectNetwork) throw new Error('Wallet not connected or wrong network')
+    
+    const contractWithSigner = new ethers.Contract(
+      PREDICTION_MARKET_ADDRESS,
+      PREDICTION_MARKET_ABI,
+      signer
+    )
+    
+    const tx = await (contractWithSigner as any).initiateDispute(BigInt(marketId), reason)
+    return await tx.wait()
+  }, [signer, isCorrectNetwork])
+
+  const redeem = useCallback(async (marketId: number) => {
+    if (!signer || !isCorrectNetwork) throw new Error('Wallet not connected or wrong network')
+    
+    const contractWithSigner = new ethers.Contract(
+      PREDICTION_MARKET_ADDRESS,
+      PREDICTION_MARKET_ABI,
+      signer
+    )
+    
+    const tx = await (contractWithSigner as any).redeem(BigInt(marketId))
+    return await tx.wait()
+  }, [signer, isCorrectNetwork])
+
+  // ==================== STATUS CHECKS ====================
+
+  const canRequestResolution = useCallback(async (marketId: number): Promise<boolean> => {
+    if (!contract) throw new Error('Contract not available')
+    
+    try {
+      return await (contract as any).canRequestResolution(BigInt(marketId))
+    } catch (error) {
+      console.error('❌ Error checking resolution status:', error)
+      return false
+    }
+  }, [contract])
+
+  const canDispute = useCallback(async (marketId: number): Promise<boolean> => {
+    if (!contract) throw new Error('Contract not available')
+    
+    try {
+      return await (contract as any).canDispute(BigInt(marketId))
+    } catch (error) {
+      console.error('❌ Error checking dispute status:', error)
+      return false
+    }
+  }, [contract])
+
+  // ==================== USER POSITIONS ====================
+
   const getUserPositions = useCallback(async (userAddress: string) => {
     if (!contract) throw new Error('Contract not available')
     
@@ -450,16 +588,15 @@ export function usePredictionMarket() {
         try {
           const market = await getMarket(i)
           
-          // Get YES and NO token balances for this user
           const yesTokenContract = new ethers.Contract(
             market.yesToken,
             ['function balanceOf(address) view returns (uint256)'],
-            provider || signer
+            provider
           )
           const noTokenContract = new ethers.Contract(
             market.noToken,
             ['function balanceOf(address) view returns (uint256)'],
-            provider || signer
+            provider
           )
           
           const yesBalance = await yesTokenContract.balanceOf(userAddress)
@@ -468,7 +605,6 @@ export function usePredictionMarket() {
           const yesBalanceFormatted = ethers.formatEther(yesBalance)
           const noBalanceFormatted = ethers.formatEther(noBalance)
           
-          // Only include markets where user has a position
           if (parseFloat(yesBalanceFormatted) > 0 || parseFloat(noBalanceFormatted) > 0) {
             positions.push({
               market,
@@ -487,23 +623,38 @@ export function usePredictionMarket() {
       console.error('Error fetching user positions:', error)
       throw error
     }
-  }, [contract, getMarket, provider, signer])
+  }, [contract, getMarket, provider])
 
   return {
     // Core functions
     createMarket,
     getMarket,
-    getAllMarkets,
-    getAmountOut,
-    getUserPositions,
-    getPrice,
+    
+    // Multiplier & Price calculations
+    getBuyYesMultiplier,
+    getBuyNoMultiplier,
+    getCurrentMultipliers,
+    getTradingInfo,
+    getSwapMultiplier,
+    getYesPrice,
+    getNoPrice,
     
     // Trading functions
-    mintCompleteSets,
-    burnCompleteSets,
-    swapTokens,
     buyYesWithBNB,
     buyNoWithBNB,
+    swapTokens,
+    
+    // AI Resolution system
+    requestResolution,
+    initiateDispute,
+    redeem,
+    
+    // Status checks
+    canRequestResolution,
+    canDispute,
+    
+    // User positions
+    getUserPositions,
     
     // State
     isLoading,

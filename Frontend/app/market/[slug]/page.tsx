@@ -7,26 +7,44 @@ import PriceChart from "@/components/price-chart"
 import TradeModal from "@/components/trade-modal"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ArrowLeft, Volume2, TrendingUp, Loader2 } from "lucide-react"
+import { ArrowLeft, Volume2, TrendingUp, Loader2, Calendar, User } from "lucide-react"
 import Link from "next/link"
 import { usePredictionMarket, MarketStatus } from "@/hooks/use-predection-market"
+import { useAllMarkets } from "@/hooks/getAllMarkets" // Import the correct hook
+
+// Helper function to generate slug from question
+export const generateSlug = (question: string, id: number): string => {
+  const baseSlug = question
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .substring(0, 60) // Limit length
+    .replace(/-$/, '') // Remove trailing hyphen
+  
+  return `${baseSlug}-${id}` || `market-${id}`
+}
 
 // Helper function to extract category from question
 const extractCategory = (question = ""): string => {
   const lowerQuestion = question.toLowerCase()
 
-  if (lowerQuestion.includes("bitcoin") || lowerQuestion.includes("crypto") || lowerQuestion.includes("ethereum"))
+  if (lowerQuestion.includes("bitcoin") || lowerQuestion.includes("crypto") || lowerQuestion.includes("ethereum") || lowerQuestion.includes("blockchain"))
     return "Crypto"
-  if (lowerQuestion.includes("election") || lowerQuestion.includes("president") || lowerQuestion.includes("politics"))
+  if (lowerQuestion.includes("election") || lowerQuestion.includes("president") || lowerQuestion.includes("politics") || lowerQuestion.includes("government"))
     return "Politics"
-  if (lowerQuestion.includes("stock") || lowerQuestion.includes("finance") || lowerQuestion.includes("market"))
+  if (lowerQuestion.includes("stock") || lowerQuestion.includes("finance") || lowerQuestion.includes("market") || lowerQuestion.includes("investment"))
     return "Finance"
-  if (lowerQuestion.includes("sports") || lowerQuestion.includes("game") || lowerQuestion.includes("team"))
+  if (lowerQuestion.includes("sports") || lowerQuestion.includes("game") || lowerQuestion.includes("team") || lowerQuestion.includes("tournament"))
     return "Sports"
-  if (lowerQuestion.includes("tech") || lowerQuestion.includes("ai") || lowerQuestion.includes("software"))
+  if (lowerQuestion.includes("tech") || lowerQuestion.includes("ai") || lowerQuestion.includes("software") || lowerQuestion.includes("technology"))
     return "Tech"
-  if (lowerQuestion.includes("economy") || lowerQuestion.includes("gdp") || lowerQuestion.includes("inflation"))
+  if (lowerQuestion.includes("economy") || lowerQuestion.includes("gdp") || lowerQuestion.includes("inflation") || lowerQuestion.includes("economic"))
     return "Economy"
+  if (lowerQuestion.includes("movie") || lowerQuestion.includes("entertainment") || lowerQuestion.includes("celebrity") || lowerQuestion.includes("film"))
+    return "Entertainment"
+  if (lowerQuestion.includes("science") || lowerQuestion.includes("health") || lowerQuestion.includes("research") || lowerQuestion.includes("medical"))
+    return "Science"
 
   return "General"
 }
@@ -34,29 +52,60 @@ const extractCategory = (question = ""): string => {
 // Convert on-chain market to frontend market format
 const convertToFrontendMarket = (m: any, id: number) => {
   const question = m?.question ?? m?.title ?? `Market ${id}`
-  const category = extractCategory(question)
+  const category = m?.category ? m.category.toUpperCase() : extractCategory(question)
   const endTime = Number(m?.endTime ?? m?.end_time ?? Math.floor(Date.now() / 1000))
   const resolutionDate = new Date(endTime * 1000)
   const now = new Date()
   const isActive = resolutionDate > now
 
   const totalBacking = parseFloat(m?.totalBacking ?? m?.volume ?? "0") || 0
+  const yesPool = parseFloat(m?.yesPool ?? "0") || 0
+  const noPool = parseFloat(m?.noPool ?? "0") || 0
+  const totalPool = yesPool + noPool
+  
+  const yesOdds = totalPool > 0 ? (yesPool / totalPool) * 100 : 50
+  const noOdds = totalPool > 0 ? (noPool / totalPool) * 100 : 50
+
+  const slug = generateSlug(question, id)
 
   return {
     id: id.toString(),
-    title: question.length > 80 ? question.substring(0, 80) + "..." : question,
+    title: question,
     description: m?.description ?? question,
     category,
-    yesOdds: Number(m?.yesPrice ?? m?.yesOdds ?? 50),
-    noOdds: Number(m?.noPrice ?? m?.noOdds ?? 50),
+    yesOdds,
+    noOdds,
     volume: totalBacking * 2000,
     resolutionDate: resolutionDate.toISOString(),
-    slug: `market-${id}`,
+    slug,
     onChainData: m,
     status: m?.status ?? m?.state ?? null,
     isActive,
-    daysLeft: Math.max(0, Math.ceil((resolutionDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+    daysLeft: Math.max(0, Math.ceil((resolutionDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))),
+    creator: m?.creator || "Unknown",
+    totalLiquidity: totalPool
   }
+}
+
+// Generate synthetic price history
+const generatePriceHistory = (market: any, days: number = 7) => {
+  const history = []
+  const now = Date.now()
+  const basePrice = market.yesOdds || 50
+  const volatility = 5 // Price volatility
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const time = now - (i * 24 * 60 * 60 * 1000)
+    const randomChange = (Math.random() - 0.5) * volatility * 2
+    const price = Math.max(10, Math.min(90, basePrice + randomChange))
+    
+    history.push({
+      time,
+      price: Number(price.toFixed(2))
+    })
+  }
+  
+  return history
 }
 
 export default function MarketPage() {
@@ -68,57 +117,89 @@ export default function MarketPage() {
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<"YES" | "NO" | null>(null)
   const [showModal, setShowModal] = useState(false)
-
-  // chart state
   const [chartData, setChartData] = useState<any[]>([])
   const [isChartLoading, setIsChartLoading] = useState(true)
 
-  const { getMarket, getAllMarkets, isContractReady, getMarketPriceHistory } = usePredictionMarket()
+  // Use the correct hook for getAllMarkets
+  const { getAllMarkets, markets: allMarkets, isLoading: marketsLoading } = useAllMarkets()
+  const { isContractReady } = usePredictionMarket()
 
-  // Extract market ID from slug
-  const marketId = marketSlug ? parseInt(marketSlug.replace("market-", "")) : -1
-
-  // Load market data
+  // Extract market ID from slug and find the correct market
   useEffect(() => {
     let cancelled = false
 
     const loadMarketData = async () => {
-      if (marketId === -1) {
+      if (!marketSlug) {
         setIsLoading(false)
         return
-      }
-
-      // wait for contract readiness if available
-      if (typeof isContractReady === "boolean" && !isContractReady) {
-        // still try fallback to all markets if contract not ready
       }
 
       setIsLoading(true)
       setError(null)
 
       try {
-        const onChainMarket = await getMarket(marketId)
+        // Use the markets from useAllMarkets hook
+        let marketsToSearch = allMarkets
+        
+        // If no markets are loaded yet, fetch them
+        if (allMarkets.length === 0 && !marketsLoading) {
+          console.log("No markets loaded, fetching...")
+          marketsToSearch = await getAllMarkets()
+        }
+
         if (cancelled) return
-        const formatted = convertToFrontendMarket(onChainMarket, marketId)
-        setMarket(formatted)
+
+        // Find market by slug (question-based) or by ID
+        let foundMarket: any = null
+        let foundId: number = -1
+
+        // Try to find by slug first
+        for (let i = 0; i < marketsToSearch.length; i++) {
+          const marketData = marketsToSearch[i]
+          const formatted = convertToFrontendMarket(marketData, i)
+          if (formatted.slug === marketSlug) {
+            foundMarket = formatted
+            foundId = i
+            break
+          }
+        }
+
+        // If not found by slug, try to extract ID from slug
+        if (!foundMarket) {
+          const idMatch = marketSlug.match(/-(\d+)$/)
+          if (idMatch) {
+            const potentialId = parseInt(idMatch[1])
+            if (potentialId >= 0 && potentialId < marketsToSearch.length) {
+              foundMarket = convertToFrontendMarket(marketsToSearch[potentialId], potentialId)
+              foundId = potentialId
+            }
+          }
+        }
+
+        // If still not found, try direct ID access
+        if (!foundMarket) {
+          const directId = parseInt(marketSlug.replace("market-", ""))
+          if (!isNaN(directId) && directId >= 0 && directId < marketsToSearch.length) {
+            foundMarket = convertToFrontendMarket(marketsToSearch[directId], directId)
+            foundId = directId
+          }
+        }
+
+        if (foundMarket) {
+          setMarket(foundMarket)
+          setError(null)
+          
+          // Generate chart data
+          const priceHistory = generatePriceHistory(foundMarket)
+          setChartData(priceHistory)
+          setIsChartLoading(false)
+        } else {
+          setError("Market not found")
+        }
+
       } catch (err: any) {
         console.error("Failed to load market:", err)
         setError(err?.message ?? "Failed to load market")
-
-        // fallback to all markets
-        try {
-          const allMarkets = await getAllMarkets()
-          if (cancelled) return
-          const foundIndex = allMarkets.findIndex((m: any, idx: number) => `market-${idx}` === marketSlug)
-          const found = foundIndex >= 0 ? allMarkets[foundIndex] : allMarkets.find((m: any) => (m?.id?.toString?.() === marketId.toString()))
-          if (found) {
-            const formatted = convertToFrontendMarket(found, marketId)
-            setMarket(formatted)
-            setError(null)
-          }
-        } catch (fallbackErr) {
-          console.error("Fallback failed:", fallbackErr)
-        }
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -128,66 +209,26 @@ export default function MarketPage() {
     return () => {
       cancelled = true
     }
-  }, [marketId, marketSlug, getMarket, getAllMarkets, isContractReady])
+  }, [marketSlug, allMarkets, marketsLoading, getAllMarkets])
 
-  // Populate chartData
+  // Update chart when market changes
   useEffect(() => {
-    if (!market) return
-    let cancelled = false
-    const loadChart = async () => {
-      setIsChartLoading(true)
-
-      // try hook history
-      if (typeof getMarketPriceHistory === "function") {
-        try {
-          const history = await getMarketPriceHistory(marketId)
-          if (!cancelled && Array.isArray(history) && history.length) {
-            const normalized = history.map((p: any) => ({
-              time: p.time ?? p.timestamp ?? p.t ?? Date.now(),
-              price: Number(p.price ?? p.yesPrice ?? p.value ?? market.yesOdds ?? 50)
-            }))
-            setChartData(normalized)
-            setIsChartLoading(false)
-            return
-          }
-        } catch (e) {
-          console.warn("getMarketPriceHistory failed", e)
-        }
-      }
-
-      const history = market.onChainData?.priceHistory || market.onChainData?.history
-      if (Array.isArray(history) && history.length) {
-        const normalized = history.map((p: any) => ({
-          time: p.time ?? p.timestamp ?? Date.now(),
-          price: Number(p.price ?? p.yesPrice ?? p.value ?? market.yesOdds ?? 50)
-        }))
-        setChartData(normalized)
-        setIsChartLoading(false)
-        return
-      }
-
-      // synthesize last 7 days
-      const now = Date.now()
-      const base = market.yesOdds ?? 50
-      const synthesized = Array.from({ length: 7 }).map((_, i) => ({
-        time: now - (6 - i) * 24 * 60 * 60 * 1000,
-        price: Math.max(0, +(base + (Math.random() - 0.5) * 4).toFixed(2))
-      }))
-      setChartData(synthesized)
-      setIsChartLoading(false)
+    if (market && !isChartLoading) {
+      const newChartData = generatePriceHistory(market)
+      setChartData(newChartData)
     }
-
-    loadChart()
-    return () => {
-      cancelled = true
-    }
-  }, [market, marketId, getMarketPriceHistory])
+  }, [market?.yesOdds])
 
   // UI helpers
   const formatVolume = (vol: number) => {
     if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}m`
     if (vol >= 1000) return `$${(vol / 1000).toFixed(1)}k`
     return `$${(vol || 0).toFixed(2)}`
+  }
+
+  const formatAddress = (addr: string) => {
+    if (!addr) return "Unknown"
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
 
   const handleOpenModal = (o: "YES" | "NO") => {
@@ -207,6 +248,21 @@ export default function MarketPage() {
     return { text: "Inactive", color: "bg-yellow-100 text-yellow-800" }
   }
   const statusBadge = getStatusBadge()
+
+  // Show loading if markets are still loading
+  if (marketsLoading && !market) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Header />
+        <div className="max-w-6xl mx-auto px-4 py-12">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading markets...</p>
+          </div>
+        </div>
+      </main>
+    )
+  }
 
   // Loading / error / not found UI
   if (isLoading) {
@@ -238,6 +294,7 @@ export default function MarketPage() {
           <div className="bg-destructive/10 border border-destructive rounded-lg p-6 text-center">
             <p className="text-destructive font-medium">❌ Error loading market</p>
             <p className="text-destructive/80 text-sm mt-1">{error}</p>
+            <p className="text-muted-foreground text-xs mt-2">Slug: {marketSlug}</p>
             <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">
               Try Again
             </Button>
@@ -262,7 +319,7 @@ export default function MarketPage() {
           <div className="text-center py-12">
             <p className="text-muted-foreground text-lg">Market not found.</p>
             <p className="text-sm text-muted-foreground mt-2">
-              Market ID: {marketId} | Slug: {marketSlug}
+              Market Slug: {marketSlug}
             </p>
             <Link href="/">
               <Button variant="outline" className="mt-4 bg-transparent">
@@ -332,13 +389,25 @@ export default function MarketPage() {
 
             <p className="text-sm sm:text-base text-muted-foreground">{market.description}</p>
 
+            {/* Creator info */}
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                <span>Created by: {formatAddress(market.creator)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>Ends: {resolutionDate.toLocaleDateString()}</span>
+              </div>
+            </div>
+
             {/* Chart - responsive container */}
             <div className="w-full bg-card rounded-lg p-4">
               <PriceChart data={chartData} isLoading={isChartLoading} />
             </div>
 
             {/* Stats grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Card className="p-4">
                 <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
                   <Volume2 className="w-4 h-4" />
@@ -354,14 +423,14 @@ export default function MarketPage() {
                 </div>
                 <p className="text-2xl font-bold">{market.daysLeft}d</p>
               </Card>
-            </div>
 
-            <Card className="p-4 bg-muted">
-              <p className="text-sm text-muted-foreground mb-1">Resolution Date</p>
-              <p className="font-semibold">
-                {resolutionDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-              </p>
-            </Card>
+              <Card className="p-4">
+                <div className="text-sm text-muted-foreground mb-1">
+                  Total Liquidity
+                </div>
+                <p className="text-2xl font-bold">{market.totalLiquidity ? `$${parseFloat(market.totalLiquidity).toFixed(2)}` : 'N/A'}</p>
+              </Card>
+            </div>
 
             <details className="mt-6 text-sm">
               <summary className="cursor-pointer text-muted-foreground">On-Chain Data (Debug)</summary>
@@ -415,8 +484,12 @@ export default function MarketPage() {
                 </button>
               </div>
 
-              <Button className="w-full mt-2" onClick={() => setShowModal(true)} disabled={!outcome}>
-                Trade Now
+              <Button 
+                className="w-full mt-2" 
+                onClick={() => outcome && setShowModal(true)} 
+                disabled={!outcome || !market.isActive}
+              >
+                {market.isActive ? 'Trade Now' : 'Market Closed'}
               </Button>
 
               {outcome && market.isActive && (

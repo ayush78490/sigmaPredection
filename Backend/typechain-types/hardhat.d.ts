@@ -18,9 +18,9 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.OutcomeToken__factory>;
     getContractFactory(
-      name: "PredictionMarketFactory",
+      name: "PredictionMarketWithMultipliers",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.PredictionMarketFactory__factory>;
+    ): Promise<Contracts.PredictionMarketWithMultipliers__factory>;
 
     getContractAt(
       name: "OutcomeToken",
@@ -28,19 +28,19 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.OutcomeToken>;
     getContractAt(
-      name: "PredictionMarketFactory",
+      name: "PredictionMarketWithMultipliers",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.PredictionMarketFactory>;
+    ): Promise<Contracts.PredictionMarketWithMultipliers>;
 
     deployContract(
       name: "OutcomeToken",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.OutcomeToken>;
     deployContract(
-      name: "PredictionMarketFactory",
+      name: "PredictionMarketWithMultipliers",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.PredictionMarketFactory>;
+    ): Promise<Contracts.PredictionMarketWithMultipliers>;
 
     deployContract(
       name: "OutcomeToken",
@@ -48,10 +48,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.OutcomeToken>;
     deployContract(
-      name: "PredictionMarketFactory",
+      name: "PredictionMarketWithMultipliers",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.PredictionMarketFactory>;
+    ): Promise<Contracts.PredictionMarketWithMultipliers>;
 
     // default types
     getContractFactory(

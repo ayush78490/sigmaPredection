@@ -2,7 +2,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { OutcomeToken } from "./OutcomeToken";
-export type { PredictionMarketFactory } from "./PredictionMarketFactory";
+export type { PredictionMarketWithMultipliers } from "./PredictionMarketWithMultipliers";
 export * as factories from "./factories";
 export { OutcomeToken__factory } from "./factories/OutcomeToken__factory";
-export { PredictionMarketFactory__factory } from "./factories/PredictionMarketFactory__factory";
+export { PredictionMarketWithMultipliers__factory } from "./factories/PredictionMarketWithMultipliers__factory";

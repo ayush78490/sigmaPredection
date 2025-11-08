@@ -2,4 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export { OutcomeToken__factory } from "./OutcomeToken__factory";
-export { PredictionMarketFactory__factory } from "./PredictionMarketFactory__factory";
+export { PredictionMarketWithMultipliers__factory } from "./PredictionMarketWithMultipliers__factory";
