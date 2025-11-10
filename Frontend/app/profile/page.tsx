@@ -499,7 +499,7 @@ export default function ProfilePage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
                       <div className={`rounded-lg p-3 border backdrop-blur-sm ${
-                        marketActive ? 'bg-primary/10 border-primary/20' : 'bg-gray-100 border-gray-300'
+                        marketActive ? 'bg-primary/10 border-primary/20' : 'bg-primary/10 border-primary/20'
                       }`}>
                         <p className="text-xs text-muted-foreground mb-1">BNB Invested</p>
                         <p className={`text-lg font-bold flex items-center gap-1 ${
@@ -510,7 +510,7 @@ export default function ProfilePage() {
                         <p className="text-xs text-muted-foreground mt-1">Total in this market</p>
                       </div>
                       <div className={`rounded-lg p-3 border backdrop-blur-sm ${
-                        marketActive ? 'bg-green-50 border-green-200' : 'bg-gray-100 border-gray-300'
+                        marketActive ? 'bg-primary/10 border-primary/20' : 'bg-primary/10 border-primary/20'
                       }`}>
                         <p className="text-xs text-muted-foreground mb-1">YES Tokens</p>
                         <p className={`text-lg font-bold flex items-center gap-1 ${
@@ -523,7 +523,7 @@ export default function ProfilePage() {
                         </p>
                       </div>
                       <div className={`rounded-lg p-3 border backdrop-blur-sm ${
-                        marketActive ? 'bg-red-50 border-red-200' : 'bg-gray-100 border-gray-300'
+                        marketActive ? 'bg-primary/10 border-primary/20' : 'bg-primary/10 border-primary/20'
                       }`}>
                         <p className="text-xs text-muted-foreground mb-1">NO Tokens</p>
                         <p className={`text-lg font-bold flex items-center gap-1 ${
@@ -536,7 +536,7 @@ export default function ProfilePage() {
                         </p>
                       </div>
                       <div className={`rounded-lg p-3 border backdrop-blur-sm ${
-                        marketActive ? 'bg-blue-50 border-blue-200' : 'bg-gray-100 border-gray-300'
+                        marketActive ? 'bg-primary/10 border-primary/20' : 'bg-primary/10 border-primary/20'
                       }`}>
                         <p className="text-xs text-muted-foreground mb-1">Predicted Outcome</p>
                         <p className={`text-lg font-bold ${
@@ -547,7 +547,7 @@ export default function ProfilePage() {
                         <p className="text-xs text-muted-foreground">{predicted.confidence.toFixed(2)}% confidence</p>
                       </div>
                       <div className={`rounded-lg p-3 border backdrop-blur-sm ${
-                        marketActive ? 'bg-primary/10 border-primary/20' : 'bg-gray-100 border-gray-300'
+                        marketActive ? 'bg-primary/10 border-primary/20' : 'bg-primary/10 border-primary/20'
                       }`}>
                         <p className="text-xs text-muted-foreground mb-1">Current Odds</p>
                         <div className="space-y-1">
