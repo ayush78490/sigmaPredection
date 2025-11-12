@@ -13,8 +13,11 @@ import type {
   ContractDeployTransaction,
   ContractRunner,
 } from "ethers";
-import type { NonPayableOverrides } from "../common";
-import type { TradingBot, TradingBotInterface } from "../TradingBot";
+import type { NonPayableOverrides } from "../../common";
+import type {
+  TradingBot,
+  TradingBotInterface,
+} from "../../Bazar.sol/TradingBot";
 
 const _abi = [
   {

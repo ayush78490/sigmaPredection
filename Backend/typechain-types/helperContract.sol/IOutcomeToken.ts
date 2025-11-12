@@ -3,7 +3,6 @@
 /* eslint-disable */
 import type {
   BaseContract,
-  BigNumberish,
   BytesLike,
   FunctionFragment,
   Result,
@@ -21,35 +20,22 @@ import type {
   TypedContractMethod,
 } from "../common";
 
-export interface PredictionMarketViewerInterface extends Interface {
-  getFunction(
-    nameOrSignature: "getUserTotalInvestment" | "originalContract"
-  ): FunctionFragment;
+export interface IOutcomeTokenInterface extends Interface {
+  getFunction(nameOrSignature: "balanceOf"): FunctionFragment;
 
   encodeFunctionData(
-    functionFragment: "getUserTotalInvestment",
-    values: [BigNumberish, AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "originalContract",
-    values?: undefined
+    functionFragment: "balanceOf",
+    values: [AddressLike]
   ): string;
 
-  decodeFunctionResult(
-    functionFragment: "getUserTotalInvestment",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "originalContract",
-    data: BytesLike
-  ): Result;
+  decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
 }
 
-export interface PredictionMarketViewer extends BaseContract {
-  connect(runner?: ContractRunner | null): PredictionMarketViewer;
+export interface IOutcomeToken extends BaseContract {
+  connect(runner?: ContractRunner | null): IOutcomeToken;
   waitForDeployment(): Promise<this>;
 
-  interface: PredictionMarketViewerInterface;
+  interface: IOutcomeTokenInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -88,28 +74,15 @@ export interface PredictionMarketViewer extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  getUserTotalInvestment: TypedContractMethod<
-    [marketId: BigNumberish, user: AddressLike],
-    [bigint],
-    "view"
-  >;
-
-  originalContract: TypedContractMethod<[], [string], "view">;
+  balanceOf: TypedContractMethod<[account: AddressLike], [bigint], "view">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
   getFunction(
-    nameOrSignature: "getUserTotalInvestment"
-  ): TypedContractMethod<
-    [marketId: BigNumberish, user: AddressLike],
-    [bigint],
-    "view"
-  >;
-  getFunction(
-    nameOrSignature: "originalContract"
-  ): TypedContractMethod<[], [string], "view">;
+    nameOrSignature: "balanceOf"
+  ): TypedContractMethod<[account: AddressLike], [bigint], "view">;
 
   filters: {};
 }

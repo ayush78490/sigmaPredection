@@ -35,7 +35,7 @@ export default function Header() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-white/80 mr-8 text-2xl px-0 py-2 rounded-2xl"
+                className="text-white mr-8 text-2xl px-0 py-2 rounded-2xl"
               >
                 GOPREDIX
               </Button>
@@ -49,7 +49,7 @@ export default function Header() {
             </button> */}
             <Link href="/profile">
               <Button
-                size="sm" variant="ghost" className="text-white/80 hover:text-white rounded-full px-5">
+                size="sm" className="text-white bg-transparent hover:text-black rounded-full px-5">
                 Portfolio
               </Button>
             </Link>
@@ -58,9 +58,11 @@ export default function Header() {
                 <Button size="sm" variant="outline" className="rounded-full px-5 bg-[#271f40] text-white border-none cursor-default" disabled>
                   {displayAddress}
                 </Button>
-                <Button size="sm" variant="secondary" className="rounded-full px-5" onClick={disconnectWallet}>
+                <Link href="/">
+                  <Button size="sm" variant="secondary" className="rounded-full px-5" onClick={disconnectWallet}>
                   Disconnect
                 </Button>
+                </Link>
               </div>
             ) : (
               <Button

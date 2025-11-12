@@ -2,9 +2,15 @@ import { useState, useCallback, useEffect } from 'react'
 import { ethers } from 'ethers'
 import { useWeb3Context } from '@/lib/wallet-context'
 import PREDICTION_MARKET_ABI from '../contracts/abi.json'
+import HELPER_CONTRACT_ARTIFACT from '../contracts/helperABI.json'
 
-// Contract address
+// Extract ABI from helper contract artifact
+const HELPER_CONTRACT_ABI = (HELPER_CONTRACT_ARTIFACT as any).abi || HELPER_CONTRACT_ARTIFACT
+
+// Contract addresses
 const PREDICTION_MARKET_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0x9d8462A5A9CA9d4398069C67FEb378806fD10fAA'
+const HELPER_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_HELPER_CONTRACT_ADDRESS || '0x00B4af3a7950CF31DdB1dCC4D8413193713CD2b5'
+
 // Updated Types to match new contract
 export enum MarketStatus {
   Open = 0,
@@ -78,7 +84,7 @@ export interface UserPosition {
   yesBalance: string
   noBalance: string
   totalInvested: string
-  bnbInvested: string // Added BNB investment amount
+  bnbInvested: string
 }
 
 // AI Validation Helper
@@ -112,57 +118,73 @@ export function usePredictionMarket() {
   const { account, provider, signer, isCorrectNetwork } = useWeb3Context()
   const [isLoading, setIsLoading] = useState(false)
   const [contract, setContract] = useState<ethers.Contract | null>(null)
+  const [helperContract, setHelperContract] = useState<ethers.Contract | null>(null)
   const [isContractReady, setIsContractReady] = useState(false)
 
-  // Initialize contract
+  // Initialize contracts
   useEffect(() => {
-    const initializeContract = async () => {
+    const initializeContracts = async () => {
       if (!provider) {
-        
         setContract(null)
+        setHelperContract(null)
         setIsContractReady(false)
         return
       }
 
       try {
-        
-        
         const network = await provider.getNetwork()
-        
         
         // BSC Testnet chain ID is 97
         if (network.chainId !== BigInt(97)) {
           console.warn("⚠️ Not on BSC Testnet. Current chain:", network.chainId)
           setContract(null)
+          setHelperContract(null)
           setIsContractReady(false)
           return
         }
 
+        // Initialize main contract
         const predictionMarketContract = new ethers.Contract(
           PREDICTION_MARKET_ADDRESS,
           PREDICTION_MARKET_ABI,
           provider
         )
+
+        // Initialize helper contract
+        const helperContractInstance = new ethers.Contract(
+          HELPER_CONTRACT_ADDRESS,
+          HELPER_CONTRACT_ABI,
+          provider
+        )
         
         try {
+          // Test both contracts
           const nextId = await (predictionMarketContract as any).nextMarketId()
+          console.log('✅ Main contract connected. Next market ID:', nextId.toString())
+          
+          // Test helper contract by calling a simple view function
+          await (helperContractInstance as any).predictionMarket()
+          console.log('✅ Helper contract connected')
           
           setContract(predictionMarketContract)
+          setHelperContract(helperContractInstance)
           setIsContractReady(true)
         } catch (testError) {
-          
+          console.error('❌ Contract initialization test failed:', testError)
           setContract(null)
+          setHelperContract(null)
           setIsContractReady(false)
         }
         
       } catch (error) {
-      
+        console.error('❌ Error initializing contracts:', error)
         setContract(null)
+        setHelperContract(null)
         setIsContractReady(false)
       }
     }
 
-    initializeContract()
+    initializeContracts()
   }, [provider])
 
   // ==================== MARKET CREATION ====================
@@ -179,13 +201,10 @@ export function usePredictionMarket() {
 
     setIsLoading(true)
     try {
-      
       const validation = await validateMarketWithPerplexity(params)
       if (!validation.valid) {
-        
         throw new Error(validation.reason || 'Market question did not pass AI validation')
       }
-      
 
       const contractWithSigner = new ethers.Contract(
         PREDICTION_MARKET_ADDRESS,
@@ -193,22 +212,19 @@ export function usePredictionMarket() {
         signer
       )
 
-      // Convert amounts to wei
       const initialYesWei = ethers.parseEther(params.initialYes)
       const initialNoWei = ethers.parseEther(params.initialNo)
       const totalValue = initialYesWei + initialNoWei
 
-      
       const tx = await (contractWithSigner as any).createMarket(
         params.question,
-        validation.category || 'OTHER', // Use AI-determined category
+        validation.category || 'OTHER',
         BigInt(params.endTime),
         initialYesWei,
         initialNoWei,
         { value: totalValue }
       )
 
-      
       const receipt = await tx.wait()
 
       let marketId: number
@@ -224,7 +240,6 @@ export function usePredictionMarket() {
         marketId = Number(nextId) - 1
       }
 
-      
       return marketId
 
     } catch (error: any) {
@@ -238,35 +253,24 @@ export function usePredictionMarket() {
   // ==================== MARKET DATA FETCHING ====================
 
   const getMarket = useCallback(async (marketId: number): Promise<Market> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!contract || !helperContract) throw new Error('Contracts not available')
 
     try {
-      
       const marketData = await (contract as any).markets(BigInt(marketId))
-      
 
-      // FIX: Remove quotes from the question
+      // Remove quotes from question
       let question = marketData[1] || `Market ${marketId}`
-      // Remove surrounding quotes if they exist
       if (typeof question === 'string' && question.startsWith('"') && question.endsWith('"')) {
         question = question.slice(1, -1)
       }
 
-      // Calculate prices and multipliers
-      const yesPool = parseFloat(ethers.formatEther(marketData[8] || 0))
-      const noPool = parseFloat(ethers.formatEther(marketData[9] || 0))
-      const totalPool = yesPool + noPool
+      // Get enhanced trading info from helper contract
+      const tradingInfo = await (helperContract as any).getTradingInfo(BigInt(marketId))
       
-      const yesPrice = totalPool > 0 ? (yesPool / totalPool) * 100 : 50
-      const noPrice = totalPool > 0 ? (noPool / totalPool) * 100 : 50
-      
-      const yesMultiplier = yesPrice > 0 ? 100 / yesPrice : 0
-      const noMultiplier = noPrice > 0 ? 100 / noPrice : 0
-
       const market: Market = {
         id: marketId,
         creator: marketData[0] || "0x0000000000000000000000000000000000000000",
-        question: question, // Use the cleaned question
+        question: question,
         category: marketData[2] || "General",
         endTime: Number(marketData[3] || 0),
         status: marketData[4] || MarketStatus.Open,
@@ -279,140 +283,122 @@ export function usePredictionMarket() {
         totalBacking: ethers.formatEther(marketData[11] || 0),
         platformFees: ethers.formatEther(marketData[12] || 0),
         resolutionRequestedAt: Number(marketData[13] || 0),
-        disputeDeadline: Number(marketData[14] || 0),
+        disputeDeadline: Number(marketData[17] || 0),
         resolutionReason: marketData[15] || '',
         resolutionConfidence: Number(marketData[16] || 0),
-        yesPrice,
-        noPrice,
-        yesMultiplier,
-        noMultiplier
+        // Use helper contract data for prices and multipliers
+        yesPrice: Number(tradingInfo[2]) / 100,
+        noPrice: Number(tradingInfo[3]) / 100,
+        yesMultiplier: Number(tradingInfo[0]) / 10000,
+        noMultiplier: Number(tradingInfo[1]) / 10000
       }
 
-    
       return market
 
     } catch (error) {
       console.error('❌ Error fetching market:', error)
       throw error
     }
-  }, [contract])
+  }, [contract, helperContract])
 
-  // ==================== USER INVESTMENT FUNCTIONS ====================
+  // ==================== USER INVESTMENT FUNCTIONS (USING HELPER) ====================
 
   const getMarketInvestment = useCallback(async (
     userAddress: string, 
     marketId: number
   ): Promise<string> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
-      
-      
-      // Use the new contract function for exact investment tracking
-      const investment = await (contract as any).getUserInvestment(BigInt(marketId), userAddress)
+      // Use helper contract's getMarketInvestment function
+      const investment = await (helperContract as any).getMarketInvestment(BigInt(marketId), userAddress)
       const investmentBNB = ethers.formatEther(investment)
-      
-    
+      console.log(`📊 Market ${marketId} investment for ${userAddress}: ${investmentBNB} BNB`)
       return investmentBNB
       
     } catch (error) {
-      
+      console.error('❌ Error fetching market investment:', error)
       return "0"
     }
-  }, [contract])
+  }, [helperContract])
 
   const getTotalInvestment = useCallback(async (userAddress: string): Promise<string> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
-      
-      // Use the new contract function for total across all markets
-      const totalInvestment = await (contract as any).getUserTotalInvestment(userAddress)
+      // Use helper contract's getUserTotalInvestment function
+      const totalInvestment = await (helperContract as any).getUserTotalInvestment(userAddress)
       const totalInvestmentBNB = ethers.formatEther(totalInvestment)
-      
+      console.log(`💰 Total investment for ${userAddress}: ${totalInvestmentBNB} BNB`)
       return totalInvestmentBNB
       
     } catch (error) {
+      console.error('❌ Error fetching total investment:', error)
       return "0"
     }
-  }, [contract])
+  }, [helperContract])
 
-  // ==================== USER POSITIONS ====================
+  // ==================== USER POSITIONS (USING HELPER) ====================
 
   const getUserPositions = useCallback(async (userAddress: string): Promise<UserPosition[]> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
-      const nextId = await (contract as any).nextMarketId()
-      const marketCount = Number(nextId)
+      console.log('🔍 Fetching user positions from helper contract...')
+      
+      // Use helper contract's getUserPositions function
+      const helperPositions = await (helperContract as any).getUserPositions(userAddress)
       const positions: UserPosition[] = []
       
-      
-      for (let i = 0; i < marketCount; i++) {
+      for (const pos of helperPositions) {
+        const marketId = Number(pos.marketId)
+        
         try {
-          const market = await getMarket(i)
+          const market = await getMarket(marketId)
           
-          const yesTokenContract = new ethers.Contract(
-            market.yesToken,
-            ['function balanceOf(address) view returns (uint256)'],
-            provider
-          )
-          const noTokenContract = new ethers.Contract(
-            market.noToken,
-            ['function balanceOf(address) view returns (uint256)'],
-            provider
-          )
+          const yesBalanceFormatted = ethers.formatEther(pos.yesBalance)
+          const noBalanceFormatted = ethers.formatEther(pos.noBalance)
+          const bnbInvested = ethers.formatEther(pos.bnbInvested)
           
-          const [yesBalance, noBalance] = await Promise.all([
-            yesTokenContract.balanceOf(userAddress),
-            noTokenContract.balanceOf(userAddress)
-          ])
-          
-          const yesBalanceFormatted = ethers.formatEther(yesBalance)
-          const noBalanceFormatted = ethers.formatEther(noBalance)
-          
-          if (parseFloat(yesBalanceFormatted) > 0 || parseFloat(noBalanceFormatted) > 0) {
-            // Get exact BNB investment for this market from contract
-            const bnbInvested = await getMarketInvestment(userAddress, i)
-            
-            const position: UserPosition = {
-              market,
-              yesBalance: yesBalanceFormatted,
-              noBalance: noBalanceFormatted,
-              totalInvested: (parseFloat(yesBalanceFormatted) + parseFloat(noBalanceFormatted)).toFixed(4),
-              bnbInvested
-            }
-            
-            positions.push(position)
-          
+          const position: UserPosition = {
+            market,
+            yesBalance: yesBalanceFormatted,
+            noBalance: noBalanceFormatted,
+            totalInvested: (parseFloat(yesBalanceFormatted) + parseFloat(noBalanceFormatted)).toFixed(4),
+            bnbInvested
           }
+          
+          positions.push(position)
+          console.log(`✅ Position for market ${marketId}:`, position)
+          
         } catch (err) {
-          console.warn(`⚠️ Failed to get position for market ${i}:`, err)
+          console.warn(`⚠️ Failed to get full data for market ${marketId}:`, err)
         }
       }
       
+      console.log(`📊 Total positions found: ${positions.length}`)
       return positions
       
     } catch (error) {
       console.error('❌ Error fetching user positions:', error)
       throw error
     }
-  }, [contract, getMarket, provider, getMarketInvestment])
+  }, [helperContract, getMarket])
 
-  // ==================== MULTIPLIER & PRICE CALCULATIONS ====================
+  // ==================== MULTIPLIER & PRICE CALCULATIONS (USING HELPER) ====================
 
   const getBuyYesMultiplier = useCallback(async (
     marketId: number, 
     bnbAmount: string
   ): Promise<MultiplierInfo> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
       const amountInWei = ethers.parseEther(bnbAmount)
-      const result = await (contract as any).getBuyYesMultiplier(BigInt(marketId), amountInWei)
+      const result = await (helperContract as any).getBuyYesMultiplier(BigInt(marketId), amountInWei)
       
       return {
-        multiplier: Number(result[0]) / 10000, // Convert from scaled value (15000 = 1.5x)
+        multiplier: Number(result[0]) / 10000,
         totalOut: ethers.formatEther(result[1]),
         totalFee: ethers.formatEther(result[2])
       }
@@ -420,17 +406,17 @@ export function usePredictionMarket() {
       console.error('❌ Error calculating YES multiplier:', error)
       throw error
     }
-  }, [contract])
+  }, [helperContract])
 
   const getBuyNoMultiplier = useCallback(async (
     marketId: number, 
     bnbAmount: string
   ): Promise<MultiplierInfo> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
       const amountInWei = ethers.parseEther(bnbAmount)
-      const result = await (contract as any).getBuyNoMultiplier(BigInt(marketId), amountInWei)
+      const result = await (helperContract as any).getBuyNoMultiplier(BigInt(marketId), amountInWei)
       
       return {
         multiplier: Number(result[0]) / 10000,
@@ -441,33 +427,33 @@ export function usePredictionMarket() {
       console.error('❌ Error calculating NO multiplier:', error)
       throw error
     }
-  }, [contract])
+  }, [helperContract])
 
   const getCurrentMultipliers = useCallback(async (
     marketId: number
   ): Promise<{ yesMultiplier: number; noMultiplier: number; yesPrice: number; noPrice: number }> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
-      const result = await (contract as any).getCurrentMultipliers(BigInt(marketId))
+      const result = await (helperContract as any).getCurrentMultipliers(BigInt(marketId))
       
       return {
         yesMultiplier: Number(result[0]) / 10000,
         noMultiplier: Number(result[1]) / 10000,
-        yesPrice: Number(result[2]) / 100, // Convert from basis points to percentage
+        yesPrice: Number(result[2]) / 100,
         noPrice: Number(result[3]) / 100
       }
     } catch (error) {
       console.error('❌ Error fetching current multipliers:', error)
       throw error
     }
-  }, [contract])
+  }, [helperContract])
 
   const getTradingInfo = useCallback(async (marketId: number): Promise<TradingInfo> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
-      const result = await (contract as any).getTradingInfo(BigInt(marketId))
+      const result = await (helperContract as any).getTradingInfo(BigInt(marketId))
       
       return {
         yesMultiplier: Number(result[0]) / 10000,
@@ -480,18 +466,18 @@ export function usePredictionMarket() {
       console.error('❌ Error fetching trading info:', error)
       throw error
     }
-  }, [contract])
+  }, [helperContract])
 
   const getSwapMultiplier = useCallback(async (
     marketId: number,
     amountIn: string,
     isYesIn: boolean
   ): Promise<SwapMultiplierInfo> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
       const amountInWei = ethers.parseEther(amountIn)
-      const result = await (contract as any).getSwapMultiplier(BigInt(marketId), amountInWei, isYesIn)
+      const result = await (helperContract as any).getSwapMultiplier(BigInt(marketId), amountInWei, isYesIn)
       
       return {
         multiplier: Number(result[0]) / 10000,
@@ -502,35 +488,59 @@ export function usePredictionMarket() {
       console.error('❌ Error calculating swap multiplier:', error)
       throw error
     }
-  }, [contract])
+  }, [helperContract])
 
-  // ==================== PRICE CALCULATIONS ====================
+  // ==================== PRICE CALCULATIONS (USING HELPER) ====================
 
   const getYesPrice = useCallback(async (marketId: number): Promise<number> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
-      const price = await (contract as any).getYesPrice(BigInt(marketId))
-      return Number(price) / 100 // Convert from basis points to percentage
+      const price = await (helperContract as any).getYesPrice(BigInt(marketId))
+      return Number(price) / 100
     } catch (error) {
       console.error('❌ Error fetching YES price:', error)
       throw error
     }
-  }, [contract])
+  }, [helperContract])
 
   const getNoPrice = useCallback(async (marketId: number): Promise<number> => {
-    if (!contract) throw new Error('Contract not available')
+    if (!helperContract) throw new Error('Helper contract not available')
     
     try {
-      const price = await (contract as any).getNoPrice(BigInt(marketId))
-      return Number(price) / 100 // Convert from basis points to percentage
+      const price = await (helperContract as any).getNoPrice(BigInt(marketId))
+      return Number(price) / 100
     } catch (error) {
       console.error('❌ Error fetching NO price:', error)
       throw error
     }
-  }, [contract])
+  }, [helperContract])
 
-  // ==================== TRADING FUNCTIONS ====================
+  // ==================== STATUS CHECKS (USING HELPER) ====================
+
+  const canRequestResolution = useCallback(async (marketId: number): Promise<boolean> => {
+    if (!helperContract) throw new Error('Helper contract not available')
+    
+    try {
+      return await (helperContract as any).canRequestResolution(BigInt(marketId))
+    } catch (error) {
+      console.error('❌ Error checking resolution status:', error)
+      return false
+    }
+  }, [helperContract])
+
+  const canDispute = useCallback(async (marketId: number): Promise<boolean> => {
+    if (!helperContract) throw new Error('Helper contract not available')
+    
+    try {
+      return await (helperContract as any).canDispute(BigInt(marketId))
+    } catch (error) {
+      console.error('❌ Error checking dispute status:', error)
+      return false
+    }
+  }, [helperContract])
+
+  // ==================== TRADING FUNCTIONS (USING MAIN CONTRACT) ====================
 
   const buyYesWithBNB = useCallback(async (
     marketId: number,
@@ -619,7 +629,7 @@ export function usePredictionMarket() {
 
   // ==================== AI RESOLUTION SYSTEM ====================
 
-  const requestResolution = useCallback(async (marketId: number) => {
+  const requestResolution = useCallback(async (marketId: number, reason: string = '') => {
     if (!signer || !isCorrectNetwork) throw new Error('Wallet not connected or wrong network')
     
     const contractWithSigner = new ethers.Contract(
@@ -628,7 +638,7 @@ export function usePredictionMarket() {
       signer
     )
     
-    const tx = await (contractWithSigner as any).requestResolution(BigInt(marketId))
+    const tx = await (contractWithSigner as any).requestResolution(BigInt(marketId), reason)
     return await tx.wait()
   }, [signer, isCorrectNetwork])
 
@@ -654,44 +664,20 @@ export function usePredictionMarket() {
       signer
     )
     
-    const tx = await (contractWithSigner as any).redeem(BigInt(marketId))
+    const tx = await (contractWithSigner as any).claimRedemption(BigInt(marketId))
     return await tx.wait()
   }, [signer, isCorrectNetwork])
-
-  // ==================== STATUS CHECKS ====================
-
-  const canRequestResolution = useCallback(async (marketId: number): Promise<boolean> => {
-    if (!contract) throw new Error('Contract not available')
-    
-    try {
-      return await (contract as any).canRequestResolution(BigInt(marketId))
-    } catch (error) {
-      console.error('❌ Error checking resolution status:', error)
-      return false
-    }
-  }, [contract])
-
-  const canDispute = useCallback(async (marketId: number): Promise<boolean> => {
-    if (!contract) throw new Error('Contract not available')
-    
-    try {
-      return await (contract as any).canDispute(BigInt(marketId))
-    } catch (error) {
-      console.error('❌ Error checking dispute status:', error)
-      return false
-    }
-  }, [contract])
 
   return {
     // Core functions
     createMarket,
     getMarket,
     
-    // Investment tracking functions
+    // Investment tracking functions (from helper)
     getMarketInvestment,
     getTotalInvestment,
     
-    // Multiplier & Price calculations
+    // Multiplier & Price calculations (from helper)
     getBuyYesMultiplier,
     getBuyNoMultiplier,
     getCurrentMultipliers,
@@ -700,27 +686,29 @@ export function usePredictionMarket() {
     getYesPrice,
     getNoPrice,
     
-    // Trading functions
+    // Trading functions (main contract)
     buyYesWithBNB,
     buyNoWithBNB,
     swapTokens,
     
-    // AI Resolution system
+    // AI Resolution system (main contract)
     requestResolution,
     initiateDispute,
     redeem,
     
-    // Status checks
+    // Status checks (from helper)
     canRequestResolution,
     canDispute,
     
-    // User positions
+    // User positions (from helper)
     getUserPositions,
     
     // State
     isLoading,
     contract,
+    helperContract,
     contractAddress: PREDICTION_MARKET_ADDRESS,
+    helperContractAddress: HELPER_CONTRACT_ADDRESS,
     isContractReady,
     
     // Constants

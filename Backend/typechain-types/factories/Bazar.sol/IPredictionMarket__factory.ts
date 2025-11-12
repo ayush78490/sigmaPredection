@@ -6,7 +6,7 @@ import { Contract, Interface, type ContractRunner } from "ethers";
 import type {
   IPredictionMarket,
   IPredictionMarketInterface,
-} from "../IPredictionMarket";
+} from "../../Bazar.sol/IPredictionMarket";
 
 const _abi = [
   {

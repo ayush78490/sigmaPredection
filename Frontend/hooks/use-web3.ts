@@ -139,7 +139,7 @@ export function useWeb3() {
     setSigner(null);
     setAccount(null);
     setChainId(null);
-    setIsInitialized(false);
+    setError(null)
   }, []);
 
   // Initialize wallet connection on component mount if already connected

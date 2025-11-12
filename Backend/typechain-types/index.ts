@@ -14,7 +14,9 @@ export type { PredictionMarketWithMultipliers } from "./Bazar.sol/PredictionMark
 export { PredictionMarketWithMultipliers__factory } from "./factories/Bazar.sol/PredictionMarketWithMultipliers__factory";
 export type { TradingBot } from "./Bazar.sol/TradingBot";
 export { TradingBot__factory } from "./factories/Bazar.sol/TradingBot__factory";
-export type { IPredictionMarketOriginal } from "./helperContract.sol/IPredictionMarketOriginal";
-export { IPredictionMarketOriginal__factory } from "./factories/helperContract.sol/IPredictionMarketOriginal__factory";
-export type { PredictionMarketViewer } from "./helperContract.sol/PredictionMarketViewer";
-export { PredictionMarketViewer__factory } from "./factories/helperContract.sol/PredictionMarketViewer__factory";
+export type { IOutcomeToken } from "./helperContract.sol/IOutcomeToken";
+export { IOutcomeToken__factory } from "./factories/helperContract.sol/IOutcomeToken__factory";
+export type { IPredictionMarketCore } from "./helperContract.sol/IPredictionMarketCore";
+export { IPredictionMarketCore__factory } from "./factories/helperContract.sol/IPredictionMarketCore__factory";
+export type { PredictionMarketHelper } from "./helperContract.sol/PredictionMarketHelper";
+export { PredictionMarketHelper__factory } from "./factories/helperContract.sol/PredictionMarketHelper__factory";

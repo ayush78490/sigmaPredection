@@ -4,7 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "hardhat compile",
+    "deploy:market": "hardhat run scripts/deploy.js --network bnbTestnet",
+    "deploy:helper": "hardhat run scripts/deploy-helper.js --network bnbTestnet",
+    "extract:abi": "ts-node scripts/extractABI.ts",
+    "extract:helper-abi": "ts-node scripts/extractHelperABI.ts",
+    "extract:all": "ts-node scripts/extractAllABIs.ts",
+    "verify:market": "hardhat verify --network bnbTestnet",
+    "verify:helper": "hardhat verify --network bnbTestnet",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "clean": "hardhat clean"
   },
   "keywords": [],
   "author": "",

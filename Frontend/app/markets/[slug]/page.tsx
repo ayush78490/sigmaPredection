@@ -348,7 +348,7 @@ export default function MarketPage() {
             <div className="bg-destructive/10 border border-destructive rounded-lg p-6 text-center backdrop-blur-sm bg-card/80">
               <p className="text-destructive font-medium">❌ Error loading market</p>
               <p className="text-destructive/80 text-sm mt-1">{error}</p>
-              <p className="text-muted-foreground text-xs mt-2">Slug: {marketSlug}</p>
+              {/* <p className="text-muted-foreground text-xs mt-2">Slug: {marketSlug}</p> */}
               <Button onClick={() => window.location.reload()} variant="outline" className="mt-4 backdrop-blur-sm bg-card/80">
                 Try Again
               </Button>
@@ -462,7 +462,7 @@ export default function MarketPage() {
                     {market.category}
                   </div>
                   <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-balance">{market.title}</h1>
-                  <p className="text-sm text-muted-foreground mt-1">Slug: {market.slug}</p>
+                  {/* <p className="text-sm text-muted-foreground mt-1">Slug: {market.slug}</p> */}
                 </div>
 
                 <div className="sm:text-right text-sm text-muted-foreground">
@@ -522,12 +522,12 @@ export default function MarketPage() {
                 </Card>
               </div>
 
-              <details className="mt-6 text-sm backdrop-blur-sm bg-card/80 p-4 rounded-lg">
+              {/* <details className="mt-6 text-sm backdrop-blur-sm bg-card/80 p-4 rounded-lg">
                 <summary className="cursor-pointer text-muted-foreground">On-Chain Data (Debug)</summary>
                 <pre className="mt-2 p-3 bg-muted rounded-lg overflow-auto text-xs">
                   {JSON.stringify(market.onChainData, (k, v) => (typeof v === "bigint" ? v.toString() : v), 2)}
                 </pre>
-              </details>
+              </details> */}
             </div>
 
             {/* Sidebar / trade panel */}

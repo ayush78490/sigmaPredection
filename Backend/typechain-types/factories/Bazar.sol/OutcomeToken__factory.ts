@@ -13,8 +13,11 @@ import type {
   ContractDeployTransaction,
   ContractRunner,
 } from "ethers";
-import type { NonPayableOverrides } from "../common";
-import type { OutcomeToken, OutcomeTokenInterface } from "../OutcomeToken";
+import type { NonPayableOverrides } from "../../common";
+import type {
+  OutcomeToken,
+  OutcomeTokenInterface,
+} from "../../Bazar.sol/OutcomeToken";
 
 const _abi = [
   {

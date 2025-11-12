@@ -30,13 +30,17 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.TradingBot__factory>;
     getContractFactory(
-      name: "IPredictionMarketOriginal",
+      name: "IOutcomeToken",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IPredictionMarketOriginal__factory>;
+    ): Promise<Contracts.IOutcomeToken__factory>;
     getContractFactory(
-      name: "PredictionMarketViewer",
+      name: "IPredictionMarketCore",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.PredictionMarketViewer__factory>;
+    ): Promise<Contracts.IPredictionMarketCore__factory>;
+    getContractFactory(
+      name: "PredictionMarketHelper",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.PredictionMarketHelper__factory>;
 
     getContractAt(
       name: "IPredictionMarket",
@@ -59,15 +63,20 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.TradingBot>;
     getContractAt(
-      name: "IPredictionMarketOriginal",
+      name: "IOutcomeToken",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IPredictionMarketOriginal>;
+    ): Promise<Contracts.IOutcomeToken>;
     getContractAt(
-      name: "PredictionMarketViewer",
+      name: "IPredictionMarketCore",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.PredictionMarketViewer>;
+    ): Promise<Contracts.IPredictionMarketCore>;
+    getContractAt(
+      name: "PredictionMarketHelper",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.PredictionMarketHelper>;
 
     deployContract(
       name: "IPredictionMarket",
@@ -86,13 +95,17 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.TradingBot>;
     deployContract(
-      name: "IPredictionMarketOriginal",
+      name: "IOutcomeToken",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IPredictionMarketOriginal>;
+    ): Promise<Contracts.IOutcomeToken>;
     deployContract(
-      name: "PredictionMarketViewer",
+      name: "IPredictionMarketCore",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.PredictionMarketViewer>;
+    ): Promise<Contracts.IPredictionMarketCore>;
+    deployContract(
+      name: "PredictionMarketHelper",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.PredictionMarketHelper>;
 
     deployContract(
       name: "IPredictionMarket",
@@ -115,15 +128,20 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.TradingBot>;
     deployContract(
-      name: "IPredictionMarketOriginal",
+      name: "IOutcomeToken",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IPredictionMarketOriginal>;
+    ): Promise<Contracts.IOutcomeToken>;
     deployContract(
-      name: "PredictionMarketViewer",
+      name: "IPredictionMarketCore",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.PredictionMarketViewer>;
+    ): Promise<Contracts.IPredictionMarketCore>;
+    deployContract(
+      name: "PredictionMarketHelper",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.PredictionMarketHelper>;
 
     // default types
     getContractFactory(

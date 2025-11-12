@@ -14,11 +14,11 @@ import type {
   ContractDeployTransaction,
   ContractRunner,
 } from "ethers";
-import type { NonPayableOverrides } from "../common";
+import type { NonPayableOverrides } from "../../common";
 import type {
   PredictionMarketWithMultipliers,
   PredictionMarketWithMultipliersInterface,
-} from "../PredictionMarketWithMultipliers";
+} from "../../Bazar.sol/PredictionMarketWithMultipliers";
 
 const _abi = [
   {
