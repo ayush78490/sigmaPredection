@@ -40,3 +40,9 @@ export type { PredictionMarketHelper } from "./contracts/helperContract.sol/Pred
 export { PredictionMarketHelper__factory } from "./factories/contracts/helperContract.sol/PredictionMarketHelper__factory";
 export type { PDXFaucet } from "./contracts/pdxfaucet.sol/PDXFaucet";
 export { PDXFaucet__factory } from "./factories/contracts/pdxfaucet.sol/PDXFaucet__factory";
+export type { IPDX } from "./contracts/predixtrading.sol/IPDX";
+export { IPDX__factory } from "./factories/contracts/predixtrading.sol/IPDX__factory";
+export type { PredictionMarketPDX } from "./contracts/predixtrading.sol/PredictionMarketPDX";
+export { PredictionMarketPDX__factory } from "./factories/contracts/predixtrading.sol/PredictionMarketPDX__factory";
+export type { TradingBotPDX } from "./contracts/predixtrading.sol/TradingBotPDX";
+export { TradingBotPDX__factory } from "./factories/contracts/predixtrading.sol/TradingBotPDX__factory";

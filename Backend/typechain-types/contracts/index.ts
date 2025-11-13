@@ -9,3 +9,5 @@ import type * as helperContractSol from "./helperContract.sol";
 export type { helperContractSol };
 import type * as pdxfaucetSol from "./pdxfaucet.sol";
 export type { pdxfaucetSol };
+import type * as predixtradingSol from "./predixtrading.sol";
+export type { predixtradingSol };
