@@ -1,37 +1,21 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, Bell } from "lucide-react"
 import Link from "next/link"
 import { useWeb3Context } from "@/lib/wallet-context"
-import MyImage from '@/public/logo.png'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
-
-// Global function to open RainbowKit modal
-declare global {
-  interface Window {
-    rainbowKitConnect: () => void;
-  }
-}
+import MyImage from '@/public/logo.png' // or your actual logo import
 
 export default function Header() {
-  const { account, disconnectWallet, connectWallet } = useWeb3Context()
-  const [isRainbowKitAvailable, setIsRainbowKitAvailable] = useState(false)
-
-  useEffect(() => {
-    // Check if RainbowKit is available
-    setIsRainbowKitAvailable(typeof window !== 'undefined' && !!(window as any).rainbowKitConnect)
-  }, [])
+  const [isOpen, setIsOpen] = useState(false)
+  const { account, connectWallet, disconnectWallet } = useWeb3Context()
 
   const displayAddress = account ? `${account.slice(0, 6)}...${account.slice(-4)}` : "Connect Wallet"
 
-  const handleLegacyConnect = async () => {
-    try {
-      await connectWallet()
-    } catch (error) {
-      console.error('Connection failed:', error)
-    }
+  const handleDisconnect = () => {
+    disconnectWallet()
+    // Simply disconnects - user will need to click "Login" again to choose a wallet
   }
 
   return (
@@ -62,7 +46,7 @@ export default function Header() {
             </Link>
           </div>
           
-          {/* Right: Portfolio/Wallet */}
+          {/* Right: Bell + Portfolio/Wallet */}
           <div className="flex items-center gap-3">
             <Link href="/profile">
               <Button
@@ -72,9 +56,7 @@ export default function Header() {
                 Portfolio
               </Button>
             </Link>
-            
             {account ? (
-              // Connected state - works with both systems
               <div className="flex items-center gap-2">
                 <Button 
                   size="sm" 
@@ -88,66 +70,19 @@ export default function Header() {
                   size="sm" 
                   variant="secondary" 
                   className="rounded-full px-5" 
-                  onClick={disconnectWallet}
+                  onClick={handleDisconnect}
                 >
                   Disconnect
                 </Button>
               </div>
             ) : (
-              // Not connected state - use RainbowKit if available, else fallback
-              <>
-                {isRainbowKitAvailable ? (
-                  <ConnectButton.Custom>
-                    {({
-                      account,
-                      chain,
-                      openAccountModal,
-                      openChainModal,
-                      openConnectModal,
-                      authenticationStatus,
-                      mounted,
-                    }) => {
-                      // Store the connect function globally for legacy system access
-                      if (typeof window !== 'undefined') {
-                        window.rainbowKitConnect = openConnectModal;
-                      }
-
-                      const ready = mounted && authenticationStatus !== 'loading';
-                      
-                      if (!ready) {
-                        return (
-                          <Button
-                            size="sm"
-                            className="rounded-full px-7 py-2 font-semibold text-black bg-[#ECFEFF]/70 hover:bg-[#ECFEFF] transition"
-                            disabled
-                          >
-                            Loading...
-                          </Button>
-                        );
-                      }
-
-                      return (
-                        <Button
-                          size="sm"
-                          className="rounded-full px-7 py-2 font-semibold text-black bg-[#ECFEFF]/70 hover:bg-[#ECFEFF] transition"
-                          onClick={openConnectModal}
-                        >
-                          Login
-                        </Button>
-                      );
-                    }}
-                  </ConnectButton.Custom>
-                ) : (
-                  // Fallback to legacy connection
-                  <Button
-                    size="sm"
-                    className="rounded-full px-7 py-2 font-semibold text-black bg-[#ECFEFF]/70 hover:bg-[#ECFEFF] transition"
-                    onClick={handleLegacyConnect}
-                  >
-                    Login
-                  </Button>
-                )}
-              </>
+              <Button
+                size="sm"
+                className="rounded-full px-7 py-2 font-semibold text-black bg-[#ECFEFF]/70 hover:bg-[#ECFEFF] transition"
+                onClick={connectWallet}
+              >
+                Login
+              </Button>
             )}
           </div>
         </div>

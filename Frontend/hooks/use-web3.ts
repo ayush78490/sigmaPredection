@@ -10,6 +10,12 @@ const getEthereumProvider = () => {
   return window.ethereum || null;
 };
 
+// Storage keys for persistence
+const STORAGE_KEYS = {
+  USER_DISCONNECTED: 'user_disconnected',
+  LAST_CONNECTED_ACCOUNT: 'last_connected_account'
+};
+
 export function useWeb3() {
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
@@ -18,6 +24,38 @@ export function useWeb3() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Check if user has manually disconnected
+  const hasUserDisconnected = useCallback(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(STORAGE_KEYS.USER_DISCONNECTED) === 'true';
+  }, []);
+
+  // Set user disconnected flag
+  const setUserDisconnected = useCallback((disconnected: boolean) => {
+    if (typeof window === 'undefined') return;
+    if (disconnected) {
+      localStorage.setItem(STORAGE_KEYS.USER_DISCONNECTED, 'true');
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.USER_DISCONNECTED);
+    }
+  }, []);
+
+  // Store last connected account
+  const setLastConnectedAccount = useCallback((account: string | null) => {
+    if (typeof window === 'undefined') return;
+    if (account) {
+      localStorage.setItem(STORAGE_KEYS.LAST_CONNECTED_ACCOUNT, account);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.LAST_CONNECTED_ACCOUNT);
+    }
+  }, []);
+
+  // Get last connected account
+  const getLastConnectedAccount = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(STORAGE_KEYS.LAST_CONNECTED_ACCOUNT);
+  }, []);
 
   const connectWallet = useCallback(async () => {
     const ethereumProvider = getEthereumProvider();
@@ -29,33 +67,17 @@ export function useWeb3() {
     try {
       setIsConnecting(true);
       setError(null);
+      setUserDisconnected(false); // Reset disconnect flag when user actively connects
 
       console.log("🔌 Connecting wallet...");
 
-      // Use explicit typing for provider responses
-      const existingAccounts = (await ethereumProvider.request({
-        method: "eth_accounts",
+      let accounts: string[] = [];
+
+      // Always request accounts to show wallet selection
+      console.log("📝 Requesting account access...");
+      accounts = (await ethereumProvider.request({
+        method: "eth_requestAccounts",
       })) as string[];
-
-      let accounts = existingAccounts as string[];
-
-      if (!accounts || accounts.length === 0) {
-        try {
-          console.log("📝 Requesting account access...");
-          accounts = (await ethereumProvider.request({
-            method: "eth_requestAccounts",
-          })) as string[];
-        } catch (requestError: any) {
-          if (requestError.code === -32002) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            accounts = (await ethereumProvider.request({
-              method: "eth_requestAccounts",
-            })) as string[];
-          } else {
-            throw requestError;
-          }
-        }
-      }
 
       if (!accounts || accounts.length === 0) {
         throw new Error("No accounts found");
@@ -75,6 +97,7 @@ export function useWeb3() {
       setSigner(web3Signer);
       setAccount(address);
       setChainId(Number(network.chainId));
+      setLastConnectedAccount(address);
       setIsInitialized(true);
 
       // Check if we're on the correct network
@@ -96,7 +119,7 @@ export function useWeb3() {
     } finally {
       setIsConnecting(false);
     }
-  }, []);
+  }, [setUserDisconnected, setLastConnectedAccount]);
 
   const switchNetwork = async () => {
     const ethereumProvider = getEthereumProvider();
@@ -139,12 +162,21 @@ export function useWeb3() {
     setSigner(null);
     setAccount(null);
     setChainId(null);
-    setError(null)
-  }, []);
+    setError(null);
+    setUserDisconnected(true); // Set flag when user manually disconnects
+    setLastConnectedAccount(null); // Clear last connected account
+  }, [setUserDisconnected, setLastConnectedAccount]);
 
-  // Initialize wallet connection on component mount if already connected
+  // Initialize wallet connection on component mount ONLY if user hasn't manually disconnected
   useEffect(() => {
     const initializeWallet = async () => {
+      // Don't auto-connect if user has manually disconnected
+      if (hasUserDisconnected()) {
+        console.log("ℹ️ Skipping auto-connect - user manually disconnected");
+        setIsInitialized(true);
+        return;
+      }
+
       const ethereumProvider = getEthereumProvider();
       if (!ethereumProvider) {
         console.log("❌ MetaMask not detected");
@@ -173,6 +205,7 @@ export function useWeb3() {
           setSigner(web3Signer);
           setAccount(address);
           setChainId(Number(network.chainId));
+          setLastConnectedAccount(address);
         } else {
           console.log("ℹ️ No existing wallet connection found");
         }
@@ -184,7 +217,7 @@ export function useWeb3() {
     };
 
     initializeWallet();
-  }, []);
+  }, [hasUserDisconnected, setLastConnectedAccount]);
 
   // Use polling instead of event listeners to avoid the addListener issue
   useEffect(() => {
@@ -207,10 +240,15 @@ export function useWeb3() {
           lastAccounts = accounts;
           if (accounts.length === 0) {
             console.log("👋 Account disconnected");
-            disconnectWallet();
+            // Don't set user disconnected flag for automatic disconnections
+            setProvider(null);
+            setSigner(null);
+            setAccount(null);
+            setChainId(null);
           } else if (accounts[0] !== account) {
             console.log("🔄 Account changed to:", accounts[0]);
             setAccount(accounts[0]);
+            setLastConnectedAccount(accounts[0]);
             const web3Provider = new ethers.BrowserProvider(ethereumProvider);
             const web3Signer = await web3Provider.getSigner();
             setSigner(web3Signer);
@@ -247,7 +285,7 @@ export function useWeb3() {
     return () => {
       mounted = false;
     };
-  }, [account, chainId, disconnectWallet, isInitialized]);
+  }, [account, chainId, isInitialized, setLastConnectedAccount]);
 
   return {
     provider,
@@ -265,7 +303,6 @@ export function useWeb3() {
 }
 
 // Hook for interacting with the prediction market contract
-// IMPORTANT: This should receive provider and signer from props, not create its own useWeb3 instance
 export function usePredictionMarket(provider: ethers.BrowserProvider | null, signer: ethers.Signer | null, account: string | null) {
   const [isContractReady, setIsContractReady] = useState(false);
 

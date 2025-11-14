@@ -5,7 +5,6 @@ import { Inter } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { Providers } from "@/components/providers"
-import { RainbowKitProviders } from "@/providers/rainbowkit-provider"
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -29,12 +28,10 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
       </head>
       <body className={`${inter.className} font-sans antialiased`}>
-        <RainbowKitProviders>
-          <Providers>
-            {children}
-            <Analytics />
-          </Providers>
-        </RainbowKitProviders>
+        <Providers>
+          {children}
+          <Analytics />
+        </Providers>
       </body>
     </html>
   )

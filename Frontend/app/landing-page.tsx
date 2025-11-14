@@ -17,7 +17,7 @@ export default function LandingPage() {
   const { account, connectWallet, isCorrectNetwork, isConnecting, isInitialized } = useWeb3Context()
 
   const handleExplore = () => {
-    router.push("/markets") // Redirect to /markets after connecting
+    router.push("/markets")
   }
   const handleLeaderboardClick = () => {
     router.push('/leaderboard')
@@ -53,8 +53,8 @@ export default function LandingPage() {
             </div>
           )}
 
-          {/* Wallet Not Connected State - Landing Page */}
-          {isInitialized && !account && (
+          {/* Landing Page Content - Always shown after initialization */}
+          {isInitialized && (
             <div className="flex flex-col items-center justify-center min-h-[60vh]">
               {/* GOPREDIX header */}
               <h1 className="text-4xl md:text-5xl font-bold mb-10 tracking-widest text-white">GOPREDIX</h1>
@@ -68,7 +68,7 @@ export default function LandingPage() {
                 <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
                   <button
                     className="px-8 py-3 rounded-full bg-[#ECFEFF]/50 text-white font-medium text-lg shadow hover:bg-[#ECFEFF] hover:text-black transition"
-                    onClick={() => handleExplore()}
+                    onClick={handleExplore}
                   >
                     Explore Markets
                   </button>
@@ -80,14 +80,6 @@ export default function LandingPage() {
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Brief connected state (before redirect) */}
-          {account && (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">Redirecting to markets...</span>
             </div>
           )}
         </div>
